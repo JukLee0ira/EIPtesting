@@ -1,0 +1,25 @@
+{
+  "name": "soliditytestingproject",
+  "version": "1.0.0",
+  "description": "- [] Testing `block.blobbasefee`: global function, retrieve the blob base fee of the current block.\r - [] Testing `blobhash(uint)`: global function, retrieving versioned hashes of blobs, akin to the homonymous Yul builtin.\r - [] Testing `blobbasefee()`: Yul builtin, retrieve the blob base fee of the current block.\r - [] Testing `blobhash()`: Yul builtin, retrieve the versioned hashes of blobs associated with the transaction.\r - [] Testing `mcopy()`: Yul builtin, cheaply copy data between memory areas.\r - [] Testing `tload()`and `tstore()`: Yul builtin, load and store data from transient storage.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^2.0.2",
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@types/node": "^18.11.18",
+    "hardhat": "^2.14.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^4.9.5"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "ethers": "^5.8.0",
+    "solc": "^0.8.28"
+  }
+}
