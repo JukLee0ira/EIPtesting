@@ -1,6 +1,6 @@
 # EIP-7702 Test Documentation
 
-## 📋 Test Overview
+## Test Overview
 
 This test suite implements EIP-7702 core functionality tests based on the specification, including four core test dimensions and comprehensive tests, totaling 10 test cases.
 
@@ -10,7 +10,7 @@ This test suite implements EIP-7702 core functionality tests based on the specif
 ---
 
 
-## 🚀 Running Tests
+## Running Tests
 
 **Prerequisites**
 - Ensure your network supports EIP-7702. If testing on a private network, you can activate it by modifying the node's `genesis.json`:
@@ -57,7 +57,7 @@ npx hardhat test test/eip7702.test.ts --verbose
 
 
 
-## 🎯 Test Dimensions
+## Test Dimensions
 
 ### A. Core Functionality Test: Code Delegation
 
@@ -299,7 +299,7 @@ npx hardhat test test/eip7702.test.ts --grep "E1. Complete Flow Test" --network 
 ---
 
 
-## 🔧 Contract Descriptions
+## Contract Descriptions
 
 ### SimpleLogic.sol
 

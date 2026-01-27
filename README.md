@@ -1,11 +1,11 @@
 
-## 📖 Project Overview
+## Project Overview
 
 This project is a systematic Ethereum Improvement Proposal (EIP) testing framework designed to verify and demonstrate the implementation of various EIP features. Built with Hardhat + Ethers.js, it provides complete test cases and documentation.
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Environment Setup
 
@@ -56,7 +56,7 @@ npx hardhat test test/eip7702.test.ts
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 EIPtesting/
@@ -79,7 +79,7 @@ EIPtesting/
 
 ---
 
-## 📋 Implemented EIP Tests
+## Implemented EIP Tests
 
 ###  EIP-7702
 
