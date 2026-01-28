@@ -81,6 +81,13 @@ describe("EIP-7702 Complete Test Suite", function () {
     }
 
     for (const r of recipients) {
+      // Check if recipient already has sufficient balance
+      const recipientBalance = await ethers.provider.getBalance(r.address);
+      if (recipientBalance >= amountPerAccount) {
+        console.log(`  [Fund Allocation] ${r.label} already has sufficient balance, skipping`);
+        continue;
+      }
+      
       const tx = await owner.sendTransaction({
         to: r.address,
         value: amountPerAccount,
@@ -132,7 +139,7 @@ describe("EIP-7702 Complete Test Suite", function () {
    * @returns Authorization object for EIP-7702 transaction
    */
   async function createAuthorization(
-    signer: Signer,
+    signer: Signer & { authorize?: Function },
     contractAddress: string,
     isSponsored: boolean = false
   ) {
@@ -153,41 +160,17 @@ describe("EIP-7702 Complete Test Suite", function () {
     console.log(`      Current nonce: ${currentNonce}, Auth nonce: ${authNonce}`);
     console.log(`      Sponsored: ${isSponsored}`);
     
-    // Construct EIP-7702 authorization message
-    // Format: keccak256(MAGIC || rlp([chain_id, address, nonce]))
-    // MAGIC = 0x05
-    
-    // For simplicity, we'll use a packed encoding
-    // This is a simplified version - production code should use proper RLP encoding
-    const message = solidityPacked(
-      ["uint8", "uint256", "address", "uint64"],
-      [0x05, chainId, contractAddress, authNonce]
-    );
-    
-    const messageHash = keccak256(message);
-    
-    // Sign the message
-    const signature = await signer.signMessage(getBytes(messageHash));
-    const sig = ethers.Signature.from(signature);
-    
-    // CRITICAL: Remove leading zeros from r and s
-    // Go's JSON parser rejects hex numbers with leading zeros like 0x001234
-    // We need to convert to BigInt first, then back to hex without leading zeros
-    const rValue = BigInt(sig.r);
-    const sValue = BigInt(sig.s);
-    
-    console.log(`      Signature r: ${sig.r} -> ${rValue}`);
-    console.log(`      Signature s: ${sig.s} -> ${sValue}`);
-    
-    // Return authorization in the format expected by EIP-7702
-    return {
-      chainId: BigInt(chainId),
-      address: contractAddress,
-      nonce: BigInt(authNonce),
-      yParity: sig.yParity,
-      r: rValue,  // BigInt without leading zeros
-      s: sValue,  // BigInt without leading zeros
-    };
+    // Use Ethers.js v6's built-in authorize() method (recommended approach from QuickNode guide)
+    if (typeof signer.authorize === 'function') {
+      const auth = await signer.authorize({
+        address: contractAddress,
+        nonce: Number(authNonce),
+      });
+      console.log(`      ✓ Authorization created using signer.authorize() method`);
+      return auth;
+    } else {
+      throw new Error("❌ Signer does not support authorize() method. Please ensure you are using Ethers.js v6 with a compatible Wallet.");
+    }
   }
 
   /**
@@ -213,28 +196,31 @@ describe("EIP-7702 Complete Test Suite", function () {
     try {
       // Format authorization list
       const formattedAuthList = authList.map(auth => {
-        // Helper: Convert to hex string
-        const toHex = (value: bigint | number, padToBytes?: number): string => {
-          let hex = BigInt(value).toString(16);
-          // Pad to specific byte length if needed (e.g., 32 bytes = 64 hex chars)
-          if (padToBytes) {
-            hex = hex.padStart(padToBytes * 2, '0');
-          }
+        // Helper: Convert to hex string (canonical form, no unnecessary leading zeros)
+        const toHex = (value: bigint | number): string => {
+          const hex = BigInt(value).toString(16);
+          // Return canonical hex representation
+          // BigInt.toString(16) already removes leading zeros
           return '0x' + hex;
         };
         
-        // CRITICAL: r and s must be exactly 32 bytes (64 hex chars)
-        // yParity must be 0 or 1
-        const v = auth.yParity === 0 ? 27 : 28;
+        // Handle signer.authorize() response structure (signature is nested)
+        const sig = auth.signature || auth;
+        const yParity = sig.v === 27 ? 0 : (sig.v === 28 ? 1 : (auth.yParity ?? 0));
+        const r = sig.r || auth.r;
+        const s = sig.s || auth.s;
+        
+        // Convert v from yParity
+        const v = yParity === 0 ? 27 : 28;
         
         return {
           chainId: toHex(auth.chainId),
           address: auth.address,
           nonce: toHex(auth.nonce),
-          yParity: toHex(auth.yParity),  // Hardhat expects this
-          v: toHex(v),  // Some nodes may expect this
-          r: toHex(auth.r, 32),  // Must be exactly 32 bytes
-          s: toHex(auth.s, 32),  // Must be exactly 32 bytes
+          yParity: toHex(yParity),
+          v: toHex(v),
+          r: r,  // Already in hex string format from signer.authorize()
+          s: s,  // Already in hex string format from signer.authorize()
         };
       });
       
@@ -353,7 +339,10 @@ describe("EIP-7702 Complete Test Suite", function () {
       }
       
       // Verify the value was set correctly
-      const value = await simpleLogic.getValue();
+      // IMPORTANT: Read from the EOA address, not the original contract!
+      // EIP-7702: EOA uses contract code but has its own storage
+      const delegatedContract = simpleLogic.attach(accountAAddress) as SimpleLogic;
+      const value = await delegatedContract.getValue();
       console.log("\n  【Verification】");
       console.log("  Value set via delegated EOA:", value.toString());
       expect(value).to.equal(12345);
