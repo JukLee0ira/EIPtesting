@@ -124,143 +124,169 @@ describe("EIP-7702 Complete Test Suite", function () {
 
   /**
    * Helper function: Create EIP-7702 authorization signature
+   * Manually implements the EIP-7702 authorization format
    * 
-   * @param signer Signing account
+   * @param signer Signing account (EOA that will delegate)
    * @param contractAddress Contract address to delegate to
-   * @param nonce Account nonce
-   * @param chainId Chain ID (0 means all chains)
-   * @returns Signature data
+   * @param isSponsored Whether this is a sponsored transaction (affects nonce calculation)
+   * @returns Authorization object for EIP-7702 transaction
    */
   async function createAuthorization(
     signer: Signer,
     contractAddress: string,
-    nonce: number,
-    chainId: number
-  ): Promise<{ chainId: number; address: string; nonce: number; v: number; r: string; s: string }> {
-    // Construct message according to EIP-7702 specification
-    // keccak(0x05 || rlp([chain_id, address, nonce]))
+    isSponsored: boolean = false
+  ) {
+    // Get current nonce
+    const signerAddress = await signer.getAddress();
+    const currentNonce = await ethers.provider.getTransactionCount(signerAddress);
     
-    // Note: This uses a simplified signing method, actual implementation requires full RLP encoding
+    // CRITICAL: Nonce handling based on transaction type
+    // - Non-sponsored (same wallet sends & authorizes): use currentNonce + 1
+    //   Because the sender's nonce is incremented BEFORE authorization list is processed
+    // - Sponsored (different wallet sends): use currentNonce
+    //   Because the EOA's nonce hasn't been incremented yet
+    const authNonce = isSponsored ? currentNonce : currentNonce + 1;
+    
+    console.log(`    Creating authorization:`);
+    console.log(`      EOA: ${signerAddress}`);
+    console.log(`      Contract: ${contractAddress}`);
+    console.log(`      Current nonce: ${currentNonce}, Auth nonce: ${authNonce}`);
+    console.log(`      Sponsored: ${isSponsored}`);
+    
+    // Construct EIP-7702 authorization message
+    // Format: keccak256(MAGIC || rlp([chain_id, address, nonce]))
+    // MAGIC = 0x05
+    
+    // For simplicity, we'll use a packed encoding
+    // This is a simplified version - production code should use proper RLP encoding
     const message = solidityPacked(
-      ["uint256", "address", "uint256"],
-      [chainId, contractAddress, nonce]
+      ["uint8", "uint256", "address", "uint64"],
+      [0x05, chainId, contractAddress, authNonce]
     );
     
     const messageHash = keccak256(message);
-    const signature = await signer.signMessage(messageHash);
     
-    // Parse signature
+    // Sign the message
+    const signature = await signer.signMessage(getBytes(messageHash));
     const sig = ethers.Signature.from(signature);
     
+    // CRITICAL: Remove leading zeros from r and s
+    // Go's JSON parser rejects hex numbers with leading zeros like 0x001234
+    // We need to convert to BigInt first, then back to hex without leading zeros
+    const rValue = BigInt(sig.r);
+    const sValue = BigInt(sig.s);
+    
+    console.log(`      Signature r: ${sig.r} -> ${rValue}`);
+    console.log(`      Signature s: ${sig.s} -> ${sValue}`);
+    
+    // Return authorization in the format expected by EIP-7702
     return {
-      chainId: chainId,
+      chainId: BigInt(chainId),
       address: contractAddress,
-      nonce: nonce,
-      v: sig.v,
-      r: sig.r,
-      s: sig.s
+      nonce: BigInt(authNonce),
+      yParity: sig.yParity,
+      r: rValue,  // BigInt without leading zeros
+      s: sValue,  // BigInt without leading zeros
     };
   }
 
   /**
-   * Helper function: Construct and send Type 0x04 transaction via raw transaction
+   * Helper function: Send EIP-7702 transaction using Ethers.js v6
    * 
-   * @param from Sender address
-   * @param to Target address
-   * @param data Transaction data
+   * @param signer The signer who sends the transaction (can be different from EOA for sponsored tx)
+   * @param eoaAddress The EOA address that has been delegated
+   * @param callData The encoded function call data
    * @param authList Authorization list
+   * @returns Transaction receipt
    */
   async function sendType4Transaction(
-    from: Signer,
-    to: string,
-    data: string,
-    authList: Array<{
-      chainId: number;
-      address: string;
-      nonce: number;
-      v: number;
-      r: string;
-      s: string;
-    }>
+    signer: Signer,
+    eoaAddress: string,
+    callData: string,
+    authList: any[]
   ) {
-    console.log("    [EIP-7702] Attempting to send Type 0x04 transaction");
+    console.log("    [EIP-7702] Sending transaction with authorization");
+    console.log("    Sender:", await signer.getAddress());
+    console.log("    Target EOA:", eoaAddress);
     console.log("    Authorization count:", authList.length);
     
     try {
-      const fromAddress = await from.getAddress();
-      const nonce = await ethers.provider.getTransactionCount(fromAddress);
-      const feeData = await ethers.provider.getFeeData();
-      
-      // Construct transaction object with Type 0x04
-      const txRequest = {
-        type: 4,  // Type 0x04 = EIP-7702
-        chainId: chainId,
-        nonce: nonce,
-        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || parseUnits("2", "gwei"),
-        maxFeePerGas: feeData.maxFeePerGas || parseUnits("50", "gwei"),
-        gasLimit: 500000,
-        to: to,
-        value: 0,
-        data: data,
-        accessList: [],
-        // Authorization list for EIP-7702
-        authorizationList: authList.map(auth => [
-          auth.chainId,
-          auth.address,
-          auth.nonce,
-          auth.v,
-          auth.r,
-          auth.s
-        ])
-      };
-      
-      // Convert BigInt values to hex strings for JSON-RPC
-      const authorizationListFormatted = authList.map(auth => ({
-        chainId: "0x" + auth.chainId.toString(16),
-        address: auth.address,
-        nonce: "0x" + auth.nonce.toString(16),
-        v: auth.v,
-        r: auth.r,
-        s: auth.s
-      }));
-      
-      const txRequestFormatted = {
-        type: "0x4",  // Type 0x04 in hex
-        chainId: "0x" + chainId.toString(16),
-        nonce: "0x" + nonce.toString(16),
-        maxPriorityFeePerGas: "0x" + (txRequest.maxPriorityFeePerGas || 0n).toString(16),
-        maxFeePerGas: "0x" + (txRequest.maxFeePerGas || 0n).toString(16),
-        gasLimit: "0x" + txRequest.gasLimit.toString(16),
-        to: txRequest.to,
-        value: "0x0",
-        data: txRequest.data,
-        accessList: txRequest.accessList,
-        authorizationList: authorizationListFormatted,
-        from: fromAddress
-      };
-      
-      console.log("    Authorization list formatted:", JSON.stringify(authorizationListFormatted).substring(0, 100));
-      
-      // Try to send using eth_sendTransaction with the transaction object
-      const txHash = await ethers.provider.send("eth_sendTransaction", [txRequestFormatted]);
-      
-      console.log("    ✓ Type 0x04 transaction sent:", txHash);
-      const receipt = await ethers.provider.waitForTransaction(txHash);
-      return receipt;
-    } catch (error: any) {
-      console.log("    ⚠️  Type 0x04 via eth_sendTransaction failed:", error.message.substring(0, 80));
-      console.log("    This may indicate the network does not support EIP-7702");
-      console.log("    Attempting fallback to regular transaction...");
-      
-      // Fallback: send regular transaction (will fail EIP-7702 code verification)
-      const tx = await from.sendTransaction({
-        to: to,
-        data: data,
-        gasLimit: 500000
+      // Format authorization list
+      const formattedAuthList = authList.map(auth => {
+        // Helper: Convert to hex string
+        const toHex = (value: bigint | number, padToBytes?: number): string => {
+          let hex = BigInt(value).toString(16);
+          // Pad to specific byte length if needed (e.g., 32 bytes = 64 hex chars)
+          if (padToBytes) {
+            hex = hex.padStart(padToBytes * 2, '0');
+          }
+          return '0x' + hex;
+        };
+        
+        // CRITICAL: r and s must be exactly 32 bytes (64 hex chars)
+        // yParity must be 0 or 1
+        const v = auth.yParity === 0 ? 27 : 28;
+        
+        return {
+          chainId: toHex(auth.chainId),
+          address: auth.address,
+          nonce: toHex(auth.nonce),
+          yParity: toHex(auth.yParity),  // Hardhat expects this
+          v: toHex(v),  // Some nodes may expect this
+          r: toHex(auth.r, 32),  // Must be exactly 32 bytes
+          s: toHex(auth.s, 32),  // Must be exactly 32 bytes
+        };
       });
       
-      console.log("    Regular transaction sent (EIP-7702 features will not be activated)");
-      return await tx.wait();
+      console.log("    Formatted auth:", JSON.stringify(formattedAuthList[0]));
+      
+      // Try sending via direct RPC call to avoid Ethers.js serialization issues
+      try {
+        const signerAddress = await signer.getAddress();
+        const nonce = await ethers.provider.getTransactionCount(signerAddress);
+        const feeData = await ethers.provider.getFeeData();
+        
+        const txParams = {
+          from: signerAddress,
+          to: eoaAddress,
+          data: callData,
+          nonce: '0x' + nonce.toString(16),
+          gasLimit: '0x7a120', // 500000
+          maxPriorityFeePerGas: '0x' + (feeData.maxPriorityFeePerGas || BigInt(2e9)).toString(16),
+          maxFeePerGas: '0x' + (feeData.maxFeePerGas || BigInt(50e9)).toString(16),
+          type: '0x4',
+          authorizationList: formattedAuthList,
+        };
+        
+        console.log("    Full txParams:", JSON.stringify(txParams, null, 2).substring(0, 500));
+        
+        const txHash = await ethers.provider.send('eth_sendTransaction', [txParams]);
+        console.log("    ✓ EIP-7702 transaction sent:", txHash);
+        
+        // Wait for transaction confirmation by polling
+        console.log("    Waiting for transaction confirmation...");
+        let receipt = null;
+        for (let i = 0; i < 60; i++) {  // Try for 60 seconds
+          receipt = await ethers.provider.getTransactionReceipt(txHash);
+          if (receipt) break;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+        if (!receipt) {
+          throw new Error("Transaction not confirmed after 60 seconds");
+        }
+        
+        console.log("    ✓ Transaction confirmed in block:", receipt.blockNumber);
+        
+        return receipt;
+      } catch (rpcError: any) {
+        console.log("    ❌ Direct RPC failed:", rpcError.message);
+        console.log("    This indicates the node may not fully support EIP-7702 or has formatting requirements");
+        throw rpcError;
+      }
+    } catch (error: any) {
+      console.log("    ❌ EIP-7702 transaction failed:", error.message);
+      throw error;
     }
   }
 
@@ -269,16 +295,8 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("\n  【Test Purpose】");
       console.log("  Verify that EOA account code is set to 0xef0100 + contract address via EIP-7702");
       
-      const nonce = await ethers.provider.getTransactionCount(accountAAddress);
-      console.log("  Initial nonce:", nonce);
-      
-      // Create authorization (prepare for Type 0x04 transaction)
-      const auth = await createAuthorization(
-        accountA,
-        simpleLogicAddress,
-        nonce,
-        chainId
-      );
+      const currentNonce = await ethers.provider.getTransactionCount(accountAAddress);
+      console.log("  Current EOA nonce:", currentNonce);
       
       console.log("\n  【Expected Behavior】");
       console.log("  1. EOA code MUST become: 0xef0100 + contract address (EIP-7702 delegation marker)");
@@ -288,18 +306,30 @@ describe("EIP-7702 Complete Test Suite", function () {
       // Check code before delegation
       const codeBefore = await ethers.provider.getCode(accountAAddress);
       console.log("\n  【Before Delegation】");
+      console.log("  EOA address:", accountAAddress);
       console.log("  EOA code:", codeBefore === "0x" ? "0x (empty, normal EOA)" : codeBefore);
-      console.log("  EOA code length:", codeBefore.length, "characters");
+      console.log("  Implementation contract:", simpleLogicAddress);
       
-      // Send Type 0x04 transaction with authorization_list to set EOA code
-      console.log("\n  【Sending EIP-7702 Transaction】");
+      // Create authorization using Ethers.js v6 signAuthorization
+      // For non-sponsored transactions (same account sends & authorizes), use current nonce + 1
+      console.log("\n  【Creating Authorization】");
+      const auth = await createAuthorization(
+        accountA,
+        simpleLogicAddress,
+        false  // Not sponsored (same wallet sends the tx)
+      );
+      
+      // Encode the function call (setValue)
       const setValueData = simpleLogic.interface.encodeFunctionData("setValue", [12345]);
       
-      await sendType4Transaction(
-        accountA,
-        simpleLogicAddress,  // Call the contract
-        setValueData,
-        [auth]  // Include authorization to delegate accountA's code to simpleLogic
+      // Send EIP-7702 transaction
+      // CRITICAL: 'to' is the EOA address, not the contract address!
+      console.log("\n  【Sending EIP-7702 Transaction】");
+      const receipt = await sendType4Transaction(
+        accountA,           // Sender (same as EOA for non-sponsored)
+        accountAAddress,    // Target is the EOA address!
+        setValueData,       // Function call data
+        [auth]             // Authorization list
       );
       
       // ===== CRITICAL EIP-7702 VERIFICATION =====
@@ -311,32 +341,24 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("  Target contract address:", simpleLogicAddress);
       console.log("  Expected EOA code:", expectedCode);
       console.log("  Actual EOA code:", codeAfter.toLowerCase());
-      console.log("  Code length:", codeAfter.length, "characters");
       console.log("  Code match:", codeAfter.toLowerCase() === expectedCode ? "✓ YES" : "✗ NO");
       
       // This assertion will FAIL on networks without EIP-7702 support
       if (codeAfter.toLowerCase() !== expectedCode) {
         throw new Error(
           [
-            "❌ EIP-7702 delegation verification FAILED",
-            "",
-            `Expected EOA code: ${expectedCode}`,
-            `Actual EOA code: ${codeAfter}`,
-            "",
-            "This means the network does NOT support EIP-7702 (Set EOA account code).",
-            "EOA code should be set to 0xef0100 + contract address after delegation.",
-            "",
-            "Possible causes:",
-            "  1. Network hasn't activated Prague fork (EIP-7702 requires Prague)",
-            "  2. Network doesn't support EIP-7702 at all",
-            "  3. Type 0x04 transaction authorization_list not properly configured",
-            "",
-            "To fix: Use a network with EIP-7702 support (e.g., --network myNet with Prague fork)",
+            "❌ EIP-7702 delegation verification FAILED"
           ].join("\n")
         );
       }
       
-      console.log("\n  ✓ EIP-7702 delegation verified successfully");
+      // Verify the value was set correctly
+      const value = await simpleLogic.getValue();
+      console.log("\n  【Verification】");
+      console.log("  Value set via delegated EOA:", value.toString());
+      expect(value).to.equal(12345);
+      
+      console.log("\n  ✓ EIP-7702 delegation verified successfully!");
     });
 
     it("A2. Test Calling Functions Through Delegated EOA", async function () {
