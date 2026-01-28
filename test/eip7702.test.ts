@@ -1,7 +1,8 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { SimpleLogic, BatchOperations, RevertTest } from "../typechain-types";
-import { BigNumber, Signer } from "ethers";
+import type { Signer } from "ethers";
+import { parseEther, formatEther, parseUnits, formatUnits, keccak256, solidityPacked, getBytes, ZeroAddress } from "ethers";
 
 describe("EIP-7702 Complete Test Suite", function () {
   let simpleLogic: SimpleLogic;
@@ -52,7 +53,7 @@ describe("EIP-7702 Complete Test Suite", function () {
     
     // Pre-allocate test funds: owner transfers 1000 to each of the other three accounts (native coin/XDC)
     // Note: On some custom networks (e.g. myNet), imported private key accounts may have insufficient initial balance, leading to INSUFFICIENT_FUNDS errors
-    const amountPerAccount = ethers.utils.parseEther("1000");
+    const amountPerAccount = parseEther("100");
     const recipients = [
       { label: "accountA", address: accountAAddress },
       { label: "accountB", address: accountBAddress },
@@ -61,14 +62,14 @@ describe("EIP-7702 Complete Test Suite", function () {
 
     // First check if owner balance is sufficient for pre-transfer (myNet common issue: account initial balance is 0)
     const ownerBalance = await ethers.provider.getBalance(ownerAddress);
-    const required = amountPerAccount.mul(recipients.length);
-    if (ownerBalance.lt(required)) {
+    const required = amountPerAccount * BigInt(recipients.length);
+    if (ownerBalance < required) {
       throw new Error(
         [
           "Test initialization failed: owner balance insufficient, cannot pre-allocate funds to test accounts.",
           `owner=${ownerAddress}`,
-          `ownerBalance=${ethers.utils.formatEther(ownerBalance)}`,
-          `required=${ethers.utils.formatEther(required)} (will transfer 1000 to each of ${recipients.length} accounts)`,
+          `ownerBalance=${formatEther(ownerBalance)}`,
+          `required=${formatEther(required)} (will transfer 1000 to each of ${recipients.length} accounts)`,
           "",
           "This usually happens on --network myNet: your configured private key accounts have no pre-allocated balance on myNet.",
           "Fix (choose one):",
@@ -85,7 +86,7 @@ describe("EIP-7702 Complete Test Suite", function () {
         value: amountPerAccount,
       });
       await tx.wait();
-      console.log(`  [Fund Allocation] owner -> ${r.label}: 1000`);
+      console.log(`  [Fund Allocation] owner -> ${r.label}: 100`);
     }
 
     // Get chain ID
@@ -102,18 +103,18 @@ describe("EIP-7702 Complete Test Suite", function () {
     // Deploy test contracts
     const SimpleLogicFactory = await ethers.getContractFactory("SimpleLogic");
     simpleLogic = await SimpleLogicFactory.deploy();
-    await simpleLogic.deployed();
-    simpleLogicAddress = simpleLogic.address;
+    await simpleLogic.waitForDeployment();
+    simpleLogicAddress = await simpleLogic.getAddress();
     
     const BatchOperationsFactory = await ethers.getContractFactory("BatchOperations");
     batchOperations = await BatchOperationsFactory.deploy();
-    await batchOperations.deployed();
-    batchOperationsAddress = batchOperations.address;
+    await batchOperations.waitForDeployment();
+    batchOperationsAddress = await batchOperations.getAddress();
     
     const RevertTestFactory = await ethers.getContractFactory("RevertTest");
     revertTest = await RevertTestFactory.deploy();
-    await revertTest.deployed();
-    revertTestAddress = revertTest.address;
+    await revertTest.waitForDeployment();
+    revertTestAddress = await revertTest.getAddress();
     
     console.log("\n=== Contract Deployment Addresses ===");
     console.log("SimpleLogic:", simpleLogicAddress);
@@ -135,23 +136,26 @@ describe("EIP-7702 Complete Test Suite", function () {
     contractAddress: string,
     nonce: number,
     chainId: number
-  ): Promise<{ v: number; r: string; s: string }> {
+  ): Promise<{ chainId: number; address: string; nonce: number; v: number; r: string; s: string }> {
     // Construct message according to EIP-7702 specification
     // keccak(0x05 || rlp([chain_id, address, nonce]))
     
     // Note: This uses a simplified signing method, actual implementation requires full RLP encoding
-    const message = ethers.utils.solidityPack(
+    const message = solidityPacked(
       ["uint256", "address", "uint256"],
       [chainId, contractAddress, nonce]
     );
     
-    const messageHash = ethers.utils.keccak256(message);
-    const signature = await signer.signMessage(ethers.utils.arrayify(messageHash));
+    const messageHash = keccak256(message);
+    const signature = await signer.signMessage(messageHash);
     
     // Parse signature
-    const sig = ethers.utils.splitSignature(signature);
+    const sig = ethers.Signature.from(signature);
     
     return {
+      chainId: chainId,
+      address: contractAddress,
+      nonce: nonce,
       v: sig.v,
       r: sig.r,
       s: sig.s
@@ -159,7 +163,7 @@ describe("EIP-7702 Complete Test Suite", function () {
   }
 
   /**
-   * Helper function: Construct Type 0x04 transaction
+   * Helper function: Construct and send Type 0x04 transaction via raw transaction
    * 
    * @param from Sender address
    * @param to Target address
@@ -179,33 +183,96 @@ describe("EIP-7702 Complete Test Suite", function () {
       s: string;
     }>
   ) {
-    // Note: Actual Type 0x04 transaction requires network support
-    // Here we use normal transaction to simulate test logic
+    console.log("    [EIP-7702] Attempting to send Type 0x04 transaction");
+    console.log("    Authorization count:", authList.length);
     
-    console.log("    [Simulating] Sending Type 0x04 transaction");
-    console.log("    Authorization list:", authList.length, "authorizations");
-    
-    // In actual environment, should construct complete Type 0x04 transaction
-    // and include authorization_list field
-    
-    const tx = await from.sendTransaction({
-      to: to,
-      data: data,
-      gasLimit: 500000
-    });
-    
-    return await tx.wait();
+    try {
+      const fromAddress = await from.getAddress();
+      const nonce = await ethers.provider.getTransactionCount(fromAddress);
+      const feeData = await ethers.provider.getFeeData();
+      
+      // Construct transaction object with Type 0x04
+      const txRequest = {
+        type: 4,  // Type 0x04 = EIP-7702
+        chainId: chainId,
+        nonce: nonce,
+        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || parseUnits("2", "gwei"),
+        maxFeePerGas: feeData.maxFeePerGas || parseUnits("50", "gwei"),
+        gasLimit: 500000,
+        to: to,
+        value: 0,
+        data: data,
+        accessList: [],
+        // Authorization list for EIP-7702
+        authorizationList: authList.map(auth => [
+          auth.chainId,
+          auth.address,
+          auth.nonce,
+          auth.v,
+          auth.r,
+          auth.s
+        ])
+      };
+      
+      // Convert BigInt values to hex strings for JSON-RPC
+      const authorizationListFormatted = authList.map(auth => ({
+        chainId: "0x" + auth.chainId.toString(16),
+        address: auth.address,
+        nonce: "0x" + auth.nonce.toString(16),
+        v: auth.v,
+        r: auth.r,
+        s: auth.s
+      }));
+      
+      const txRequestFormatted = {
+        type: "0x4",  // Type 0x04 in hex
+        chainId: "0x" + chainId.toString(16),
+        nonce: "0x" + nonce.toString(16),
+        maxPriorityFeePerGas: "0x" + (txRequest.maxPriorityFeePerGas || 0n).toString(16),
+        maxFeePerGas: "0x" + (txRequest.maxFeePerGas || 0n).toString(16),
+        gasLimit: "0x" + txRequest.gasLimit.toString(16),
+        to: txRequest.to,
+        value: "0x0",
+        data: txRequest.data,
+        accessList: txRequest.accessList,
+        authorizationList: authorizationListFormatted,
+        from: fromAddress
+      };
+      
+      console.log("    Authorization list formatted:", JSON.stringify(authorizationListFormatted).substring(0, 100));
+      
+      // Try to send using eth_sendTransaction with the transaction object
+      const txHash = await ethers.provider.send("eth_sendTransaction", [txRequestFormatted]);
+      
+      console.log("    ✓ Type 0x04 transaction sent:", txHash);
+      const receipt = await ethers.provider.waitForTransaction(txHash);
+      return receipt;
+    } catch (error: any) {
+      console.log("    ⚠️  Type 0x04 via eth_sendTransaction failed:", error.message.substring(0, 80));
+      console.log("    This may indicate the network does not support EIP-7702");
+      console.log("    Attempting fallback to regular transaction...");
+      
+      // Fallback: send regular transaction (will fail EIP-7702 code verification)
+      const tx = await from.sendTransaction({
+        to: to,
+        data: data,
+        gasLimit: 500000
+      });
+      
+      console.log("    Regular transaction sent (EIP-7702 features will not be activated)");
+      return await tx.wait();
+    }
   }
 
   describe("A. Core Functionality Test: Code Delegation", function () {
     it("A1. Test EOA Successfully Sets Code Delegation", async function () {
       console.log("\n  【Test Purpose】");
-      console.log("  Verify that EOA account can successfully set code to target contract via 0x04 transaction");
+      console.log("  Verify that EOA account code is set to 0xef0100 + contract address via EIP-7702");
       
       const nonce = await ethers.provider.getTransactionCount(accountAAddress);
       console.log("  Initial nonce:", nonce);
       
-      // Create authorization
+      // Create authorization (prepare for Type 0x04 transaction)
       const auth = await createAuthorization(
         accountA,
         simpleLogicAddress,
@@ -213,25 +280,63 @@ describe("EIP-7702 Complete Test Suite", function () {
         chainId
       );
       
-      console.log("\n  【Expected Output】");
-      console.log("  1. Calling eth_getCode returns: 0xef0100 || contract address");
-      console.log("  2. Can call SimpleLogic functions through EOA");
-      console.log("  3. accountA's nonce increases by 1");
+      console.log("\n  【Expected Behavior】");
+      console.log("  1. EOA code MUST become: 0xef0100 + contract address (EIP-7702 delegation marker)");
+      console.log("  2. Can call contract functions through the EOA address");
+      console.log("  3. EOA maintains its own storage context");
       
-      // Verify code change
+      // Check code before delegation
       const codeBefore = await ethers.provider.getCode(accountAAddress);
-      console.log("\n  【Actual Result】");
-      console.log("  EOA code before delegation:", codeBefore === "0x" ? "0x (empty, normal EOA)" : codeBefore);
-      console.log("  EOA code length before delegation:", codeBefore.length, "characters");
+      console.log("\n  【Before Delegation】");
+      console.log("  EOA code:", codeBefore === "0x" ? "0x (empty, normal EOA)" : codeBefore);
+      console.log("  EOA code length:", codeBefore.length, "characters");
+      
+      // Send Type 0x04 transaction with authorization_list to set EOA code
+      console.log("\n  【Sending EIP-7702 Transaction】");
+      const setValueData = simpleLogic.interface.encodeFunctionData("setValue", [12345]);
+      
+      await sendType4Transaction(
+        accountA,
+        simpleLogicAddress,  // Call the contract
+        setValueData,
+        [auth]  // Include authorization to delegate accountA's code to simpleLogic
+      );
+      
+      // ===== CRITICAL EIP-7702 VERIFICATION =====
+      // Check if EOA code has been set to delegation marker
+      const codeAfter = await ethers.provider.getCode(accountAAddress);
+      const expectedCode = "0xef0100" + simpleLogicAddress.slice(2).toLowerCase();
+      
+      console.log("\n  【After Delegation - EIP-7702 Verification】");
       console.log("  Target contract address:", simpleLogicAddress);
-      console.log("  Expected code after delegation:", "0xef0100" + simpleLogicAddress.slice(2).toLowerCase());
+      console.log("  Expected EOA code:", expectedCode);
+      console.log("  Actual EOA code:", codeAfter.toLowerCase());
+      console.log("  Code length:", codeAfter.length, "characters");
+      console.log("  Code match:", codeAfter.toLowerCase() === expectedCode ? "✓ YES" : "✗ NO");
       
-      // In actual environment, should verify code becomes 0xef0100 + address
-      // const expectedCode = "0xef0100" + simpleLogicAddress.slice(2);
-      // const codeAfter = await ethers.provider.getCode(accountAAddress);
-      // expect(codeAfter).to.equal(expectedCode);
+      // This assertion will FAIL on networks without EIP-7702 support
+      if (codeAfter.toLowerCase() !== expectedCode) {
+        throw new Error(
+          [
+            "❌ EIP-7702 delegation verification FAILED",
+            "",
+            `Expected EOA code: ${expectedCode}`,
+            `Actual EOA code: ${codeAfter}`,
+            "",
+            "This means the network does NOT support EIP-7702 (Set EOA account code).",
+            "EOA code should be set to 0xef0100 + contract address after delegation.",
+            "",
+            "Possible causes:",
+            "  1. Network hasn't activated Prague fork (EIP-7702 requires Prague)",
+            "  2. Network doesn't support EIP-7702 at all",
+            "  3. Type 0x04 transaction authorization_list not properly configured",
+            "",
+            "To fix: Use a network with EIP-7702 support (e.g., --network myNet with Prague fork)",
+          ].join("\n")
+        );
+      }
       
-      console.log("  ✓ Test passed");
+      console.log("\n  ✓ EIP-7702 delegation verified successfully");
     });
 
     it("A2. Test Calling Functions Through Delegated EOA", async function () {
@@ -239,7 +344,7 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("  Verify that delegated EOA can successfully execute target contract functions");
       
       // Directly use contract test logic
-      const testValue = BigNumber.from(12345);
+      const testValue = 12345;
       const tx = await simpleLogic.connect(accountA).setValue(testValue);
       const receipt = await tx.wait();
       
@@ -256,7 +361,7 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("\n  【Expected Output】");
       console.log("  Set value:", testValue.toString());
       console.log("  Read value:", value.toString());
-      console.log("  Match result:", value.eq(testValue) ? "✓ Equal" : "✗ Not equal");
+      console.log("  Match result:", value === BigInt(testValue) ? "✓ Equal" : "✗ Not equal");
       
       expect(value).to.equal(testValue);
       console.log("  ✓ Function call successful");
@@ -284,32 +389,32 @@ describe("EIP-7702 Complete Test Suite", function () {
       const balanceBBefore = await ethers.provider.getBalance(accountBAddress);
       console.log("\n  【Account B Initial State】");
       console.log("  Address:", accountBAddress);
-      console.log("  Balance:", ethers.utils.formatEther(balanceBBefore), "XDC");
+      console.log("  Balance:", formatEther(balanceBBefore), "XDC");
       
       // accountB initiates transaction, but logic executes in accountA's context
-      const tx = await simpleLogic.connect(accountB).setValue(BigNumber.from(9999));
+      const tx = await simpleLogic.connect(accountB).setValue(9999);
       const receipt = await tx.wait();
       
       const balanceBAfter = await ethers.provider.getBalance(accountBAddress);
-      const effectiveGasPrice: BigNumber | undefined =
-        (receipt as any)?.effectiveGasPrice ?? (tx as any)?.gasPrice;
+      const effectiveGasPrice: bigint | undefined =
+        receipt?.effectiveGasPrice ?? (tx as any)?.gasPrice;
       if (!effectiveGasPrice) {
         throw new Error("Cannot get gasPrice / effectiveGasPrice (please check network and Hardhat/Ethers version)");
       }
-      const gasCost = receipt!.gasUsed.mul(effectiveGasPrice);
+      const gasCost = receipt!.gasUsed * effectiveGasPrice;
       
       console.log("\n  【Transaction Details】");
       console.log("  Transaction hash:", receipt.transactionHash);
       console.log("  Block number:", receipt.blockNumber);
       console.log("  Gas used:", receipt.gasUsed.toString());
-      console.log("  Effective gas price:", ethers.utils.formatUnits(effectiveGasPrice, "gwei"), "Gwei");
-      console.log("  Total gas cost:", ethers.utils.formatEther(gasCost), "XDC");
+      console.log("  Effective gas price:", formatUnits(effectiveGasPrice, "gwei"), "Gwei");
+      console.log("  Total gas cost:", formatEther(gasCost), "XDC");
       console.log("  Transaction status:", receipt.status === 1 ? "Success (1)" : "Failed (0)");
       
       console.log("\n  【Account B Final State】");
-      console.log("  Final balance:", ethers.utils.formatEther(balanceBAfter), "XDC");
-      console.log("  Balance change:", ethers.utils.formatEther(balanceBBefore.sub(balanceBAfter)), "XDC");
-      console.log("  Verification:", balanceBAfter.lt(balanceBBefore) ? "✓ Balance decreased (gas paid)" : "✗ Balance not decreased");
+      console.log("  Final balance:", formatEther(balanceBAfter), "XDC");
+      console.log("  Balance change:", formatEther(balanceBBefore - balanceBAfter), "XDC");
+      console.log("  Verification:", balanceBAfter < balanceBBefore ? "✓ Balance decreased (gas paid)" : "✗ Balance not decreased");
       
       expect(balanceBAfter).to.be.lt(balanceBBefore);
       console.log("  ✓ Gas sponsorship test passed");
@@ -319,7 +424,7 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("\n  【Test Purpose】");
       console.log("  Verify executing multiple operations in a single transaction");
       
-      const initialValue = BigNumber.from(100);
+      const initialValue = 100;
       const valueBefore = await simpleLogic.connect(accountA).getValue();
       
       const tx = await simpleLogic.connect(accountA).batchOperation(initialValue);
@@ -335,10 +440,10 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("  Value before operation:", valueBefore.toString());
       console.log("  Input initial value:", initialValue.toString());
       console.log("  Value after operation:", finalValue.toString());
-      console.log("  Expected value:", initialValue.add(10).toString(), "(initial value + 10)");
-      console.log("  Verification:", finalValue.eq(initialValue.add(10)) ? "✓ Value matches" : "✗ Value doesn't match");
+      console.log("  Expected value:", (initialValue + 10).toString(), "(initial value + 10)");
+      console.log("  Verification:", finalValue === BigInt(initialValue + 10) ? "✓ Value matches" : "✗ Value doesn't match");
       
-      expect(finalValue).to.equal(initialValue.add(10));
+      expect(finalValue).to.equal(initialValue + 10);
       console.log("  ✓ Batch operation test passed");
     });
 
@@ -382,7 +487,7 @@ describe("EIP-7702 Complete Test Suite", function () {
       // Test failure case
       console.log("\n  【Test Case 1: Value < 100, should revert】");
       try {
-        const tx = await revertTest.connect(accountA).conditionalRevert(BigNumber.from(50));
+        const tx = await revertTest.connect(accountA).conditionalRevert(50);
         await tx.wait();
         expect.fail("Should throw exception");
       } catch (error: any) {
@@ -393,18 +498,18 @@ describe("EIP-7702 Complete Test Suite", function () {
       
       // Test success case
       console.log("\n  【Test Case 2: Value > 100, should succeed】");
-      const tx = await revertTest.connect(accountA).conditionalRevert(BigNumber.from(150));
+      const tx = await revertTest.connect(accountA).conditionalRevert(150);
       const receipt = await tx.wait();
       const counter = await revertTest.counter();
       
       console.log("  Input value: 150");
-      console.log("  Transaction hash:", receipt.transactionHash);
-      console.log("  Block number:", receipt.blockNumber);
-      console.log("  Gas used:", receipt.gasUsed.toString());
+      console.log("  Transaction hash:", receipt!.hash);
+      console.log("  Block number:", receipt!.blockNumber);
+      console.log("  Gas used:", receipt!.gasUsed.toString());
       console.log("  Counter value:", counter.toString());
       console.log("  Result: ✓ Transaction successful");
       
-      expect(counter).to.equal(BigNumber.from(150));
+      expect(counter).to.equal(150);
       console.log("  ✓ Conditional revert test passed");
     });
   });
@@ -417,7 +522,7 @@ describe("EIP-7702 Complete Test Suite", function () {
       const nonce = await ethers.provider.getTransactionCount(accountCAddress);
       
       // Create authorization pointing to zero address (clear delegation)
-      const zeroAddress = ethers.constants.AddressZero;
+      const zeroAddress = ZeroAddress;
       console.log("\n  【Authorization Info】");
       console.log("  Account address:", accountCAddress);
       console.log("  Current nonce:", nonce);
@@ -438,7 +543,7 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("  Account reverts to normal EOA state");
       
       const code = await ethers.provider.getCode(accountCAddress);
-      const codeHash = ethers.utils.keccak256(code);
+      const codeHash = keccak256(code);
       
       console.log("\n  【Actual Result】");
       console.log("  Account code:", code === "0x" ? "0x (empty, normal EOA)" : code);
@@ -455,7 +560,7 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("  Verify that when delegating multiple times, the last valid authorization takes effect");
       
       console.log("\n  【First Delegation: SimpleLogic】");
-      const tx1 = await simpleLogic.connect(accountC).setValue(BigNumber.from(111));
+      const tx1 = await simpleLogic.connect(accountC).setValue(111);
       const receipt1 = await tx1.wait();
       const value1 = await simpleLogic.connect(accountC).getValue();
       
@@ -466,7 +571,7 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("  SimpleLogic.getValue():", value1.toString());
       
       console.log("\n  【Second Delegation: BatchOperations】");
-      const tx2 = await batchOperations.connect(accountC).executeOperation(BigNumber.from(1), BigNumber.from(222));
+      const tx2 = await batchOperations.connect(accountC).executeOperation(1, 222);
       const receipt2 = await tx2.wait();
       const count = await batchOperations.getOperationCount(accountCAddress);
       
@@ -499,7 +604,7 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("  6. Clear delegation");
       
       console.log("\n  【Step 1: Set initial value = 777】");
-      const tx1 = await simpleLogic.connect(accountA).setValue(BigNumber.from(777));
+      const tx1 = await simpleLogic.connect(accountA).setValue(777);
       const receipt1 = await tx1.wait();
       console.log("  Transaction hash:", receipt1.transactionHash);
       console.log("  Block number:", receipt1.blockNumber);
@@ -530,9 +635,9 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("  After first increment: 778");
       console.log("  After second increment:", finalValue.toString());
       console.log("  Expected value: 779");
-      console.log("  Verification:", finalValue.eq(779) ? "✓ Value matches" : "✗ Value doesn't match");
+      console.log("  Verification:", finalValue === 779n ? "✓ Value matches" : "✗ Value doesn't match");
       
-      expect(finalValue).to.equal(BigNumber.from(779));
+      expect(finalValue).to.equal(779);
       console.log("  ✓ Complete flow test passed");
     });
 
