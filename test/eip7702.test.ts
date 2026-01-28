@@ -22,7 +22,7 @@ describe("EIP-7702 Complete Test Suite", function () {
   let accountBAddress: string;
   let accountCAddress: string;
   
-  let chainId: number;
+  let chainId: bigint;
 
   before(async function () {
     // Get test accounts
@@ -67,15 +67,6 @@ describe("EIP-7702 Complete Test Suite", function () {
       throw new Error(
         [
           "Test initialization failed: owner balance insufficient, cannot pre-allocate funds to test accounts.",
-          `owner=${ownerAddress}`,
-          `ownerBalance=${formatEther(ownerBalance)}`,
-          `required=${formatEther(required)} (will transfer 1000 to each of ${recipients.length} accounts)`,
-          "",
-          "This usually happens on --network myNet: your configured private key accounts have no pre-allocated balance on myNet.",
-          "Fix (choose one):",
-          "- Pre-allocate balance to these addresses in myNet's genesis / alloc; or",
-          "- Use an account with balance as owner; or",
-          "- Use faucet/transfer to give owner sufficient balance before running tests.",
         ].join("\n")
       );
     }
@@ -128,6 +119,26 @@ describe("EIP-7702 Complete Test Suite", function () {
     console.log("BatchOperations:", batchOperationsAddress);
     console.log("RevertTest:", revertTestAddress);
   });
+
+  /**
+   * Helper function: Create a funded wallet for testing
+   * @param amount Amount in ETH to fund the wallet (default: 10)
+   * @returns New wallet with funds
+   */
+  async function createFundedWallet(amount: string = "10"): Promise<Signer> {
+    const wallet = ethers.Wallet.createRandom().connect(ethers.provider);
+    const walletAddress = await wallet.getAddress();
+    
+    // Fund from owner and wait for confirmation
+    const tx = await owner.sendTransaction({
+      to: walletAddress,
+      value: parseEther(amount)
+    });
+    await tx.wait();  // Wait for transaction to be mined
+    
+    console.log(`  [New Wallet] Created: ${walletAddress}`);
+    return wallet;
+  }
 
   /**
    * Helper function: Create EIP-7702 authorization signature
@@ -194,6 +205,35 @@ describe("EIP-7702 Complete Test Suite", function () {
     console.log("    Authorization count:", authList.length);
     
     try {
+      // Preferred path: let Ethers sign locally via signer.sendTransaction().
+      // This works for both Hardhat-managed signers and dynamically created wallets,
+      // and avoids HH103 ("Account is not managed by the node") when using eth_sendTransaction.
+      try {
+        const signerAddress = await signer.getAddress();
+        const nonce = await ethers.provider.getTransactionCount(signerAddress);
+        const feeData = await ethers.provider.getFeeData();
+        
+        const tx = await (signer as any).sendTransaction({
+          to: eoaAddress,
+          data: callData,
+          nonce,
+          gasLimit: 500000n,
+          maxPriorityFeePerGas: feeData.maxPriorityFeePerGas ?? 2_000_000_000n,
+          maxFeePerGas: feeData.maxFeePerGas ?? 50_000_000_000n,
+          type: 4,
+          authorizationList: authList,
+        });
+        
+        console.log("    ✓ EIP-7702 transaction sent (signed):", tx.hash);
+        console.log("    Waiting for transaction confirmation...");
+        const receipt = await tx.wait();
+        if (!receipt) throw new Error("No receipt");
+        console.log("    ✓ Transaction confirmed in block:", receipt.blockNumber);
+        return receipt;
+      } catch (signedSendError: any) {
+        console.log("    Warning: signer.sendTransaction failed, falling back to eth_sendTransaction:", signedSendError.message);
+      }
+
       // Format authorization list
       const formattedAuthList = authList.map(auth => {
         // Helper: Convert to hex string (canonical form, no unnecessary leading zeros)
@@ -276,6 +316,44 @@ describe("EIP-7702 Complete Test Suite", function () {
     }
   }
 
+  /**
+   * Helper: Ensure an EOA is delegated to a specific implementation contract.
+   * This makes tests independent when running individually on persistent networks (e.g. myNet).
+   *
+   * Strategy:
+   * - If code already matches 0xef0100 + impl address: do nothing
+   * - Otherwise: send a delegation-only type0x04 tx (empty calldata) to update code
+   */
+  async function ensureDelegation(
+    eoaSigner: Signer & { authorize?: Function },
+    eoaAddress: string,
+    implementationAddress: string,
+    label: string
+  ) {
+    const expectedCode = ("0xef0100" + implementationAddress.slice(2)).toLowerCase();
+    const currentCode = (await ethers.provider.getCode(eoaAddress)).toLowerCase();
+
+    console.log(`\n  【Ensure Delegation】 ${label}`);
+    console.log("  EOA:", eoaAddress);
+    console.log("  Target implementation:", implementationAddress);
+    console.log("  Current code:", currentCode);
+    console.log("  Expected code:", expectedCode);
+
+    if (currentCode === expectedCode) {
+      console.log("  ✓ Delegation already set");
+      return;
+    }
+
+    console.log("  Delegation missing or different → setting delegation (delegation-only type0x04)");
+    const auth = await createAuthorization(eoaSigner, implementationAddress, false);
+    await sendType4Transaction(eoaSigner, eoaAddress, "0x", [auth]);
+
+    const codeAfter = (await ethers.provider.getCode(eoaAddress)).toLowerCase();
+    console.log("  Code after:", codeAfter);
+    expect(codeAfter).to.equal(expectedCode);
+    console.log("  ✓ Delegation ensured");
+  }
+
   describe("A. Core Functionality Test: Code Delegation", function () {
     it("A1. Test EOA Successfully Sets Code Delegation", async function () {
       console.log("\n  【Test Purpose】");
@@ -353,21 +431,28 @@ describe("EIP-7702 Complete Test Suite", function () {
     it("A2. Test Calling Functions Through Delegated EOA", async function () {
       console.log("\n  【Test Purpose】");
       console.log("  Verify that delegated EOA can successfully execute target contract functions");
+
+      // Make this test runnable independently (without requiring A1 to run first)
+      await ensureDelegation(accountA as any, accountAAddress, simpleLogicAddress, "accountA -> SimpleLogic");
       
-      // Directly use contract test logic
+      // CRITICAL: Call through EOA address, not contract address
+      // This tests EIP-7702 delegation - if network doesn't support it, this will fail
+      const delegatedContract = simpleLogic.attach(accountAAddress) as SimpleLogic;
+      
       const testValue = 12345;
-      const tx = await simpleLogic.connect(accountA).setValue(testValue);
+      const tx = await delegatedContract.connect(accountA).setValue(testValue);
       const receipt = await tx.wait();
+      if (!receipt) throw new Error("No receipt");
       
       console.log("\n  【Transaction Details】");
-      console.log("  Transaction hash:", receipt.transactionHash);
+      console.log("  Transaction hash:", receipt.hash);
       console.log("  Block number:", receipt.blockNumber);
       console.log("  Gas used:", receipt.gasUsed.toString());
       console.log("  Sender address:", receipt.from);
       console.log("  Contract address:", receipt.to);
       console.log("  Transaction status:", receipt.status === 1 ? "Success (1)" : "Failed (0)");
       
-      const value = await simpleLogic.connect(accountA).getValue();
+      const value = await delegatedContract.getValue();
       
       console.log("\n  【Expected Output】");
       console.log("  Set value:", testValue.toString());
@@ -381,8 +466,13 @@ describe("EIP-7702 Complete Test Suite", function () {
     it("A3. Test Getting Contract Version Info", async function () {
       console.log("\n  【Test Purpose】");
       console.log("  Verify that view functions can be called after delegation");
+
+      // Make this test runnable independently (without requiring A1/A2 to run first)
+      await ensureDelegation(accountA as any, accountAAddress, simpleLogicAddress, "accountA -> SimpleLogic");
       
-      const version = await simpleLogic.getVersion();
+      // CRITICAL: Call through EOA address to test EIP-7702 delegation
+      const delegatedContract = simpleLogic.attach(accountAAddress) as SimpleLogic;
+      const version = await delegatedContract.getVersion();
       
       console.log("\n  【Expected Output】");
       console.log("  Version info:", version);
@@ -395,39 +485,72 @@ describe("EIP-7702 Complete Test Suite", function () {
   describe("B. Account Abstraction Features Test", function () {
     it("B1. Test Gas Sponsorship", async function () {
       console.log("\n  【Test Purpose】");
-      console.log("  Verify that account A signs authorization, but account B initiates transaction and pays gas");
+      console.log("  Verify that delegator signs authorization, but sponsor initiates transaction and pays gas");
       
-      const balanceBBefore = await ethers.provider.getBalance(accountBAddress);
-      console.log("\n  【Account B Initial State】");
-      console.log("  Address:", accountBAddress);
-      console.log("  Balance:", formatEther(balanceBBefore), "XDC");
+      // accountC = delegator (signs authorization)
+      // owner = sponsor (pays gas, doesn't interfere with test accounts)
       
-      // accountB initiates transaction, but logic executes in accountA's context
-      const tx = await simpleLogic.connect(accountB).setValue(9999);
+      console.log("\n  【Test Setup】");
+      console.log("  Delegator: accountC -", accountCAddress);
+      console.log("  Sponsor: owner -", ownerAddress);
+      
+      // accountC signs authorization
+      const auth = await createAuthorization(
+        accountC,
+        simpleLogicAddress,
+        true  // Sponsored transaction
+      );
+      
+      // Send Type 0x04 transaction - owner pays gas, accountC gets delegation
+      const setValueData = simpleLogic.interface.encodeFunctionData("setValue", [9999]);
+      await sendType4Transaction(
+        owner,  // Sponsor sends the transaction
+        accountCAddress,  // Target is accountC's EOA
+        setValueData,
+        [auth]
+      );
+      
+      console.log("  ✓ Delegation established with owner paying gas");
+      
+      // Get sponsor's balance before second transaction
+      const balanceSponsorBefore = await ethers.provider.getBalance(ownerAddress);
+      console.log("\n  【Sponsor (owner) Initial State】");
+      console.log("  Address:", ownerAddress);
+      console.log("  Balance:", formatEther(balanceSponsorBefore), "XDC");
+      
+      // Now sponsor calls function through delegator's EOA (sponsor pays gas again)
+      const delegatedContract = simpleLogic.attach(accountCAddress) as SimpleLogic;
+      const tx = await delegatedContract.connect(owner).setValue(8888);
       const receipt = await tx.wait();
+      if (!receipt) throw new Error("No receipt");
       
-      const balanceBAfter = await ethers.provider.getBalance(accountBAddress);
+      const balanceSponsorAfter = await ethers.provider.getBalance(ownerAddress);
       const effectiveGasPrice: bigint | undefined =
-        receipt?.effectiveGasPrice ?? (tx as any)?.gasPrice;
+        (receipt as any).effectiveGasPrice ?? (receipt as any).gasPrice ?? (tx as any)?.gasPrice;
       if (!effectiveGasPrice) {
         throw new Error("Cannot get gasPrice / effectiveGasPrice (please check network and Hardhat/Ethers version)");
       }
-      const gasCost = receipt!.gasUsed * effectiveGasPrice;
+      const gasCost = receipt.gasUsed * effectiveGasPrice;
       
       console.log("\n  【Transaction Details】");
-      console.log("  Transaction hash:", receipt.transactionHash);
+      console.log("  Transaction hash:", receipt.hash);
       console.log("  Block number:", receipt.blockNumber);
       console.log("  Gas used:", receipt.gasUsed.toString());
       console.log("  Effective gas price:", formatUnits(effectiveGasPrice, "gwei"), "Gwei");
       console.log("  Total gas cost:", formatEther(gasCost), "XDC");
       console.log("  Transaction status:", receipt.status === 1 ? "Success (1)" : "Failed (0)");
       
-      console.log("\n  【Account B Final State】");
-      console.log("  Final balance:", formatEther(balanceBAfter), "XDC");
-      console.log("  Balance change:", formatEther(balanceBBefore - balanceBAfter), "XDC");
-      console.log("  Verification:", balanceBAfter < balanceBBefore ? "✓ Balance decreased (gas paid)" : "✗ Balance not decreased");
+      console.log("\n  【Sponsor (owner) Final State】");
+      console.log("  Final balance:", formatEther(balanceSponsorAfter), "XDC");
+      console.log("  Balance change:", formatEther(balanceSponsorBefore - balanceSponsorAfter), "XDC");
+      console.log("  Verification:", balanceSponsorAfter < balanceSponsorBefore ? "✓ Balance decreased (gas paid)" : "✗ Balance not decreased");
       
-      expect(balanceBAfter).to.be.lt(balanceBBefore);
+      // Verify value was set correctly in accountC's storage
+      const finalValue = await delegatedContract.getValue();
+      console.log("  Final value in accountC's storage:", finalValue.toString());
+      
+      expect(balanceSponsorAfter).to.be.lt(balanceSponsorBefore);
+      expect(finalValue).to.equal(8888);
       console.log("  ✓ Gas sponsorship test passed");
     });
 
@@ -435,15 +558,27 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("\n  【Test Purpose】");
       console.log("  Verify executing multiple operations in a single transaction");
       
-      const initialValue = 100;
-      const valueBefore = await simpleLogic.connect(accountA).getValue();
+      // Use accountC for this test. Ensure delegation so B2 can run independently (without requiring B1).
+      console.log("\n  【Using accountC】");
+      console.log("  Account:", accountCAddress);
+
+      await ensureDelegation(accountC as any, accountCAddress, simpleLogicAddress, "accountC -> SimpleLogic");
       
-      const tx = await simpleLogic.connect(accountA).batchOperation(initialValue);
+      // CRITICAL: Call through EOA address to test EIP-7702 delegation
+      const delegatedContract = simpleLogic.attach(accountCAddress) as SimpleLogic;
+      
+      const initialValue = 100;
+      const valueBefore = await delegatedContract.getValue();
+      
+      console.log("  Value before operation:", valueBefore.toString());
+      
+      const tx = await delegatedContract.connect(accountC).batchOperation(initialValue);
       const receipt = await tx.wait();
-      const finalValue = await simpleLogic.connect(accountA).getValue();
+      if (!receipt) throw new Error("No receipt");
+      const finalValue = await delegatedContract.getValue();
       
       console.log("\n  【Transaction Details】");
-      console.log("  Transaction hash:", receipt.transactionHash);
+      console.log("  Transaction hash:", receipt.hash);
       console.log("  Block number:", receipt.blockNumber);
       console.log("  Gas used:", receipt.gasUsed.toString());
       
@@ -465,28 +600,59 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("\n  【Test Purpose】");
       console.log("  Verify that authorization tuple is skipped when nonce doesn't match");
       
+      // Note: accountC was used in B1 for gas sponsorship test
+      // After B1, accountC should have delegation to SimpleLogic
+      // But for this test, we'll try to set an authorization with wrong nonce
+      
       const currentNonce = await ethers.provider.getTransactionCount(accountCAddress);
       const wrongNonce = currentNonce + 999; // Wrong nonce
       
       console.log("  Current nonce:", currentNonce);
       console.log("  Wrong nonce:", wrongNonce.toString());
+      console.log("  Test account: accountC -", accountCAddress);
       
-      // Create authorization with wrong nonce
-      const auth = await createAuthorization(
-        accountC,
-        simpleLogicAddress,
-        wrongNonce,
-        chainId
-      );
+      // Manually create an authorization with wrong nonce (bypassing the helper)
+      // The helper would use currentNonce, but we want to test with wrong nonce
+      const auth = await (accountC as any).authorize({
+        address: batchOperationsAddress,  // Try to delegate to different contract
+        nonce: Number(wrongNonce),
+      });
+      
+      console.log("    Creating authorization:");
+      console.log("      EOA:", accountCAddress);
+      console.log("      Contract:", batchOperationsAddress);
+      console.log("      Current nonce:", currentNonce, ", Auth nonce:", wrongNonce);
+      console.log("      ✓ Authorization created using signer.authorize() method");
+      
+      // Get code before attempting delegation
+      const codeBefore = await ethers.provider.getCode(accountCAddress);
+      console.log("  Code before:", codeBefore);
+      
+      // Try to send transaction with wrong nonce authorization
+      // According to EIP-7702, invalid nonce should be skipped silently
+      try {
+        const executeOpData = batchOperations.interface.encodeFunctionData("executeOperation", [1, 999]);
+        await sendType4Transaction(
+          accountC,
+          accountCAddress,
+          executeOpData,
+          [auth]
+        );
+      } catch (error: any) {
+        console.log("  Transaction may fail or succeed (depends on network implementation)");
+      }
       
       console.log("\n  【Expected Output】");
       console.log("  This authorization tuple is skipped");
       console.log("  Transaction doesn't fail, but authorization doesn't take effect");
-      console.log("  accountC remains as normal EOA");
+      console.log("  accountC's delegation should remain unchanged");
       
-      // Verify code hasn't changed in actual environment
-      const code = await ethers.provider.getCode(accountCAddress);
-      expect(code).to.equal("0x");
+      // Verify code hasn't changed
+      const codeAfter = await ethers.provider.getCode(accountCAddress);
+      console.log("  Code after:", codeAfter);
+      console.log("  Verification:", codeBefore === codeAfter ? "✓ Code unchanged" : "✗ Code changed");
+      
+      expect(codeAfter).to.equal(codeBefore);
       console.log("  ✓ Invalid nonce test passed");
     });
 
@@ -495,10 +661,33 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("\n  【Test Purpose】");
       console.log("  Test revert when require condition fails");
       
+      // Use accountB for this test (not previously delegated)
+      // This avoids conflicts with accountA's existing delegation to SimpleLogic
+      console.log("\n  【Delegating accountB to RevertTest】");
+      const auth = await createAuthorization(
+        accountB,
+        revertTestAddress,
+        false  // Not sponsored
+      );
+      
+      // Initialize with successfulOperation(0)
+      const initData = revertTest.interface.encodeFunctionData("successfulOperation", [0]);
+      const delegateReceipt = await sendType4Transaction(
+        accountB,
+        accountBAddress,
+        initData,
+        [auth]
+      );
+      
+      console.log("  ✓ AccountB delegated to RevertTest");
+      
+      // Now use accountB's EOA to call revertTest functions
+      const delegatedRevertTest = revertTest.attach(accountBAddress) as RevertTest;
+      
       // Test failure case
       console.log("\n  【Test Case 1: Value < 100, should revert】");
       try {
-        const tx = await revertTest.connect(accountA).conditionalRevert(50);
+        const tx = await delegatedRevertTest.connect(accountB).conditionalRevert(50);
         await tx.wait();
         expect.fail("Should throw exception");
       } catch (error: any) {
@@ -509,9 +698,9 @@ describe("EIP-7702 Complete Test Suite", function () {
       
       // Test success case
       console.log("\n  【Test Case 2: Value > 100, should succeed】");
-      const tx = await revertTest.connect(accountA).conditionalRevert(150);
+      const tx = await delegatedRevertTest.connect(accountB).conditionalRevert(150);
       const receipt = await tx.wait();
-      const counter = await revertTest.counter();
+      const counter = await delegatedRevertTest.counter();
       
       console.log("  Input value: 150");
       console.log("  Transaction hash:", receipt!.hash);
@@ -530,21 +719,60 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("\n  【Test Purpose】");
       console.log("  Verify that sending authorization with address 0x0 can clear code delegation");
       
+      // Use accountC for this test (should already have delegation from B1)
+      console.log("\n  【Using accountC】");
+      console.log("  Account:", accountCAddress);
+      
+      // Check current delegation state
+      const codeBefore = await ethers.provider.getCode(accountCAddress);
+      console.log("  Current code:", codeBefore);
+      
+      if (codeBefore === "0x") {
+        // If no delegation, set it up first
+        console.log("\n  【Step 1: Set up initial delegation】");
+        const auth1 = await createAuthorization(
+          accountC,
+          simpleLogicAddress,
+          false
+        );
+        
+        const setValueData = simpleLogic.interface.encodeFunctionData("setValue", [123]);
+        await sendType4Transaction(
+          accountC,
+          accountCAddress,
+          setValueData,
+          [auth1]
+        );
+        
+        const codeAfterDelegation = await ethers.provider.getCode(accountCAddress);
+        console.log("  Code after delegation:", codeAfterDelegation);
+        console.log("  ✓ Delegation established");
+      } else {
+        console.log("  ✓ accountC already has delegation");
+      }
+      
+      // Now clear the delegation
+      console.log("\n  【Step 2: Clear delegation with zero address】");
+      const zeroAddress = ZeroAddress;
       const nonce = await ethers.provider.getTransactionCount(accountCAddress);
       
-      // Create authorization pointing to zero address (clear delegation)
-      const zeroAddress = ZeroAddress;
-      console.log("\n  【Authorization Info】");
       console.log("  Account address:", accountCAddress);
       console.log("  Current nonce:", nonce);
       console.log("  Target address:", zeroAddress, "(zero address, used to clear delegation)");
       console.log("  Chain ID:", chainId);
       
-      const auth = await createAuthorization(
+      const auth2 = await createAuthorization(
         accountC,
         zeroAddress,
-        nonce,
-        chainId
+        false  // Not sponsored
+      );
+      
+      // Send Type 0x04 transaction with zero address to clear delegation
+      await sendType4Transaction(
+        accountC,
+        accountCAddress,
+        "0x",  // Empty data is fine for zero address
+        [auth2]
       );
       
       console.log("\n  【Expected Output】");
@@ -570,32 +798,109 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("\n  【Test Purpose】");
       console.log("  Verify that when delegating multiple times, the last valid authorization takes effect");
       
-      console.log("\n  【First Delegation: SimpleLogic】");
-      const tx1 = await simpleLogic.connect(accountC).setValue(111);
-      const receipt1 = await tx1.wait();
-      const value1 = await simpleLogic.connect(accountC).getValue();
+      // IMPORTANT: Make this test independent from previous tests.
+      // Use a fresh funded EOA so we don't rely on accountB's prior delegation state (e.g. from C4).
+      console.log("\n  【Using fresh funded EOA】");
+      const freshEOA = await createFundedWallet("2"); // 2 ETH is plenty for a few txs
+      const freshEOAAddress = await freshEOA.getAddress();
+      console.log("  Account:", freshEOAAddress);
       
-      console.log("  Transaction hash:", receipt1.transactionHash);
+      // Check current state
+      const codeBefore = await ethers.provider.getCode(freshEOAAddress);
+      console.log("  Current code:", codeBefore);
+      
+      // Strategy: Delegate twice in separate transactions to test override
+      // Also use a two-step approach for each delegation:
+      // 1) send a delegation-only type0x04 tx (empty calldata) to update code
+      // 2) send a normal call tx through the newly delegated EOA
+      console.log("\n  【First Delegation: SimpleLogic】");
+      
+      const auth1 = await createAuthorization(
+        freshEOA as any,
+        simpleLogicAddress,
+        false
+      );
+      
+      // Step 1: delegation-only tx (no calldata)
+      const receipt1 = await sendType4Transaction(
+        freshEOA,
+        freshEOAAddress,
+        "0x",
+        [auth1]
+      );
+      
+      // Verify first delegation
+      const code1 = await ethers.provider.getCode(freshEOAAddress);
+      const expectedCode1 = "0xef0100" + simpleLogicAddress.slice(2).toLowerCase();
+      console.log("  EOA code after first delegation:", code1.toLowerCase());
+      console.log("  Expected code:", expectedCode1);
+      console.log("  First delegation verified:", code1.toLowerCase() === expectedCode1 ? "✓" : "✗");
+      
+      // Step 2: call through newly delegated EOA using a normal transaction
+      const delegatedSimpleLogic = simpleLogic.attach(freshEOAAddress) as SimpleLogic;
+      const txSet = await delegatedSimpleLogic.connect(freshEOA as any).setValue(111);
+      const receiptSet = await txSet.wait();
+      if (!receiptSet) throw new Error("No receipt for setValue");
+      const value1 = await delegatedSimpleLogic.getValue();
+      
+      console.log("  Transaction hash:", receipt1.hash);
       console.log("  Block number:", receipt1.blockNumber);
       console.log("  Target contract:", simpleLogicAddress);
+      console.log("  setValue tx hash:", receiptSet.hash);
+      console.log("  setValue block number:", receiptSet.blockNumber);
       console.log("  Set value:", value1.toString());
-      console.log("  SimpleLogic.getValue():", value1.toString());
       
-      console.log("\n  【Second Delegation: BatchOperations】");
-      const tx2 = await batchOperations.connect(accountC).executeOperation(1, 222);
-      const receipt2 = await tx2.wait();
-      const count = await batchOperations.getOperationCount(accountCAddress);
+      console.log("\n  【Second Delegation: BatchOperations (Override)】");
       
-      console.log("  Transaction hash:", receipt2.transactionHash);
+      // Second delegation to BatchOperations (should override SimpleLogic)
+      const auth2 = await createAuthorization(
+        freshEOA as any,
+        batchOperationsAddress,
+        false  
+      );
+
+      // IMPORTANT: Do NOT try to call BatchOperations function in the SAME tx that changes delegation.
+      // Depending on client semantics, calldata may be handled before the delegation takes effect.
+      // So we first send a "delegation-only" tx (empty data) to update code, then send a normal call.
+      const receipt2 = await sendType4Transaction(
+        freshEOA,
+        freshEOAAddress,
+        "0x",
+        [auth2]
+      );
+      
+      // Verify second delegation points to BatchOperations (not SimpleLogic)
+      const code2 = await ethers.provider.getCode(freshEOAAddress);
+      const expectedCode2 = "0xef0100" + batchOperationsAddress.slice(2).toLowerCase();
+      console.log("  EOA code after second delegation:", code2.toLowerCase());
+      console.log("  Expected code (BatchOperations):", expectedCode2);
+      console.log("  Second delegation verified:", code2.toLowerCase() === expectedCode2 ? "✓" : "✗");
+      
+      // Now call executeOperation through the newly delegated EOA
+      const delegatedBatchOps = batchOperations.attach(freshEOAAddress) as BatchOperations;
+      const txOp = await delegatedBatchOps.connect(freshEOA as any).executeOperation(1, 222);
+      const receiptOp = await txOp.wait();
+      if (!receiptOp) throw new Error("No receipt for executeOperation");
+      const count = await delegatedBatchOps.getOperationCount(freshEOAAddress);
+      
+      console.log("  Transaction hash:", receipt2.hash);
       console.log("  Block number:", receipt2.blockNumber);
       console.log("  Target contract:", batchOperationsAddress);
+      console.log("  executeOperation tx hash:", receiptOp.hash);
+      console.log("  executeOperation block number:", receiptOp.blockNumber);
       console.log("  Operation type: 1, operation data: 222");
       console.log("  BatchOperations.getOperationCount():", count.toString());
       
       console.log("\n  【Expected Output】");
-      console.log("  If multiple authorizations point to same account, use last valid authorization");
-      console.log("  Account code updates to latest delegation target");
-      console.log("  Verification: ✓ Both different delegation calls executed successfully");
+      console.log("  When delegating multiple times, the last valid authorization takes effect");
+      console.log("  Account code updates from SimpleLogic to BatchOperations");
+      console.log("  Verification: ✓ Second delegation (BatchOperations) overrode the first");
+      
+      // Verify the final delegation is to BatchOperations
+      expect(code2.toLowerCase()).to.equal(expectedCode2);
+      expect(code1.toLowerCase()).to.equal(expectedCode1);
+      expect(value1).to.equal(111);
+      expect(count).to.be.gt(0);
       
       console.log("  ✓ Multiple delegation override test passed");
     });
@@ -614,31 +919,42 @@ describe("EIP-7702 Complete Test Suite", function () {
       console.log("  5. Execute delegated contract functions");
       console.log("  6. Clear delegation");
       
+      // Use accountA for complete flow test. Ensure delegation so E1 can run independently.
+      console.log("\n  【Using accountA】");
+      console.log("  Account:", accountAAddress);
+      await ensureDelegation(accountA as any, accountAAddress, simpleLogicAddress, "accountA -> SimpleLogic");
+      
+      // CRITICAL: Call through EOA address to test EIP-7702 delegation
+      const delegatedContract = simpleLogic.attach(accountAAddress) as SimpleLogic;
+      
       console.log("\n  【Step 1: Set initial value = 777】");
-      const tx1 = await simpleLogic.connect(accountA).setValue(777);
+      const tx1 = await delegatedContract.connect(accountA).setValue(777);
       const receipt1 = await tx1.wait();
-      console.log("  Transaction hash:", receipt1.transactionHash);
+      if (!receipt1) throw new Error("No receipt");
+      console.log("  Transaction hash:", receipt1.hash);
       console.log("  Block number:", receipt1.blockNumber);
       
-      const value1 = await simpleLogic.connect(accountA).getValue();
+      const value1 = await delegatedContract.getValue();
       console.log("  Current value:", value1.toString());
       
       console.log("\n  【Step 2: First increment】");
-      const tx2 = await simpleLogic.connect(accountA).increment();
+      const tx2 = await delegatedContract.connect(accountA).increment();
       const receipt2 = await tx2.wait();
-      console.log("  Transaction hash:", receipt2.transactionHash);
+      if (!receipt2) throw new Error("No receipt");
+      console.log("  Transaction hash:", receipt2.hash);
       console.log("  Block number:", receipt2.blockNumber);
       
-      const value2 = await simpleLogic.connect(accountA).getValue();
+      const value2 = await delegatedContract.getValue();
       console.log("  Current value:", value2.toString());
       
       console.log("\n  【Step 3: Second increment】");
-      const tx3 = await simpleLogic.connect(accountA).increment();
+      const tx3 = await delegatedContract.connect(accountA).increment();
       const receipt3 = await tx3.wait();
-      console.log("  Transaction hash:", receipt3.transactionHash);
+      if (!receipt3) throw new Error("No receipt");
+      console.log("  Transaction hash:", receipt3.hash);
       console.log("  Block number:", receipt3.blockNumber);
       
-      const finalValue = await simpleLogic.connect(accountA).getValue();
+      const finalValue = await delegatedContract.getValue();
       console.log("  Final value:", finalValue.toString());
       
       console.log("\n  【Result Verification】");

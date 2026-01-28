@@ -308,6 +308,7 @@ npx hardhat test test/eip7702.test.ts --grep "E1. Complete Flow Test" --network 
 - Increment operation
 - Batch operations
 - Revert testing
+- Receive/Fallback (to support empty-calldata delegation-only transactions in tests)
 
 **Main Functions:**
 ```solidity
@@ -326,6 +327,7 @@ function getVersion() external pure returns (string memory)
 **Features:**
 - Complex batch operations
 - Operation history tracking
+- Receive/Fallback (to support empty-calldata delegation-only transactions in tests)
 
 **Main Functions:**
 ```solidity

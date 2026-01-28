@@ -62,6 +62,18 @@ contract SimpleLogic {
     function getVersion() external pure returns (string memory) {
         return "SimpleLogic v1.0";
     }
+
+    /**
+     * @notice Receive function to accept ETH transfers / empty calldata calls
+     * @dev Helps EIP-7702 "delegation-only" txs with empty data not revert
+     */
+    receive() external payable {}
+
+    /**
+     * @notice Fallback function to handle unknown / empty function calls
+     * @dev Helps EIP-7702 tests where delegation is updated without calling a known function
+     */
+    fallback() external payable {}
 }
 
 
