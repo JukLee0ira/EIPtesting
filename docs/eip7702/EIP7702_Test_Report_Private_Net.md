@@ -12,7 +12,17 @@ The suite covers and verifies the core behaviors introduced/required by EIP-7702
 - Complete "Happy Path" flow
 
 
-## Test Environment
+## Multi-Network Comparison
+
+We compared the support for EIP-7702 across different networks using the same test suite.
+
+| Network | Chain ID | Test Result | Primary Error / Reason | EIP-7702 Support |
+|---|---|---|---|---|
+| `myNet` (Private) | `20986` | ✅ **10/10 Passed** | N/A | Full |
+| Unsupported Chain | N/A | ❌ **0/10 Failed** | `transaction type not supported` | None (Type 0x04) |
+
+
+## Test Environment (myNet)
 
 **Network:** `myNet`  
 **Chain ID:** `20986`
@@ -251,7 +261,9 @@ Verification: ✓ Value matches
 
 ## Conclusion
 
-Results of running the EIP-7702 test suite on `myNet`:
+Results of running the EIP-7702 test suite:
+
+### Private Network (myNet)
 - [x] Core delegation capabilities all passed (A1-A3)
 - [x] Gas sponsorship and batch execution all passed (B1-B2)
 - [x] Security/boundary behavior consistent with expectations (C1, C4)

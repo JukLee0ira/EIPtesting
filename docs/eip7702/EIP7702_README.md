@@ -44,8 +44,7 @@ npx hardhat compile
 ### 3. Run Tests
 
 ```bash
-# Run on private network myNet (requires EIP-7702 support)
-npx hardhat test test/eip7702.test.ts --network myNet
+npx hardhat test test/eip7702.test.ts --network <network option>
 ```
 
 
@@ -65,7 +64,7 @@ npx hardhat test test/eip7702.test.ts --verbose
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7702.test.ts --grep "A1. Test EOA Successfully Sets Code Delegation" --network myNet
+npx hardhat test test/eip7702.test.ts --grep "A1. Test EOA Successfully Sets Code Delegation" --network <network option>
 ```
 
 **Test Purpose:**
@@ -89,7 +88,7 @@ npx hardhat test test/eip7702.test.ts --grep "A1. Test EOA Successfully Sets Cod
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7702.test.ts --grep "A2. Test Calling Functions Through Delegated EOA" --network myNet
+npx hardhat test test/eip7702.test.ts --grep "A2. Test Calling Functions Through Delegated EOA" --network <network option>
 ```
 
 **Test Purpose:**
@@ -111,7 +110,7 @@ npx hardhat test test/eip7702.test.ts --grep "A2. Test Calling Functions Through
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7702.test.ts --grep "A3. Test Getting Contract Version Info" --network myNet
+npx hardhat test test/eip7702.test.ts --grep "A3. Test Getting Contract Version Info" --network <network option>
 ```
 
 **Test Purpose:**
@@ -132,7 +131,7 @@ npx hardhat test test/eip7702.test.ts --grep "A3. Test Getting Contract Version 
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7702.test.ts --grep "B1. Test Gas Sponsorship" --network myNet
+npx hardhat test test/eip7702.test.ts --grep "B1. Test Gas Sponsorship" --network <network option>
 ```
 
 **Test Purpose:**
@@ -156,7 +155,7 @@ npx hardhat test test/eip7702.test.ts --grep "B1. Test Gas Sponsorship" --networ
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7702.test.ts --grep "B2. Test Transaction Batching" --network myNet
+npx hardhat test test/eip7702.test.ts --grep "B2. Test Transaction Batching" --network <network option>
 ```
 
 **Test Purpose:**
@@ -180,7 +179,7 @@ npx hardhat test test/eip7702.test.ts --grep "B2. Test Transaction Batching" --n
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7702.test.ts --grep "C1. Test Invalid Nonce Authorization" --network myNet
+npx hardhat test test/eip7702.test.ts --grep "C1. Test Invalid Nonce Authorization" --network <network option>
 ```
 
 **Test Purpose:**
@@ -205,7 +204,7 @@ npx hardhat test test/eip7702.test.ts --grep "C1. Test Invalid Nonce Authorizati
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7702.test.ts --grep "C4. Test Conditional Revert" --network myNet
+npx hardhat test test/eip7702.test.ts --grep "C4. Test Conditional Revert" --network <network option>
 ```
 
 **Test Purpose:**
@@ -227,7 +226,7 @@ npx hardhat test test/eip7702.test.ts --grep "C4. Test Conditional Revert" --net
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7702.test.ts --grep "D1. Test Reset Authorization" --network myNet
+npx hardhat test test/eip7702.test.ts --grep "D1. Test Reset Authorization" --network <network option>
 ```
 
 **Test Purpose:**
@@ -253,7 +252,7 @@ npx hardhat test test/eip7702.test.ts --grep "D1. Test Reset Authorization" --ne
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7702.test.ts --grep "D2. Test Multiple Delegation Overrides" --network myNet
+npx hardhat test test/eip7702.test.ts --grep "D2. Test Multiple Delegation Overrides" --network <network option>
 ```
 
 **Test Purpose:**
@@ -278,7 +277,7 @@ npx hardhat test test/eip7702.test.ts --grep "D2. Test Multiple Delegation Overr
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7702.test.ts --grep "E1. Complete Flow Test" --network myNet
+npx hardhat test test/eip7702.test.ts --grep "E1. Complete Flow Test" --network <network option>
 ```
 
 **Test Purpose:**
