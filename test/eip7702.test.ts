@@ -630,17 +630,26 @@ describe("EIP-7702 Complete Test Suite", function () {
       
       // Try to send transaction with wrong nonce authorization
       // According to EIP-7702, invalid nonce should be skipped silently
+      const executeOpData = batchOperations.interface.encodeFunctionData("executeOperation", [1, 999]);
+      let receipt: any;
       try {
-        const executeOpData = batchOperations.interface.encodeFunctionData("executeOperation", [1, 999]);
-        await sendType4Transaction(
+        receipt = await sendType4Transaction(
           accountC,
           accountCAddress,
           executeOpData,
           [auth]
         );
       } catch (error: any) {
-        console.log("  Transaction may fail or succeed (depends on network implementation)");
+        // IMPORTANT:
+        // This test is meant to validate EIP-7702 behavior ("invalid nonce auth is skipped").
+        // If the network/node doesn't support type:0x04 / authorizationList, the tx won't be accepted,
+        // and we MUST fail the test (not silently pass).
+        expect.fail(`EIP-7702 type0x04 transaction was rejected / not supported by the node: ${error?.message ?? String(error)}`);
       }
+
+      // Ensure the tx was actually mined successfully (otherwise the test is meaningless)
+      expect(receipt?.status).to.equal(1);
+      console.log("  Transaction status:", receipt.status === 1 ? "Success (1)" : "Failed (0)");
       
       console.log("\n  【Expected Output】");
       console.log("  This authorization tuple is skipped");
