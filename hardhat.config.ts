@@ -52,7 +52,7 @@ const config: HardhatUserConfig = {
       },
     },
     devnet: {
-      url: "https://devnetstats.hashlabs.apothem.network/devnet",
+      url: "http://vmi651343.contaboserver.net:31111",
       accounts,
       timeout: 60000,
       gasPrice: 300000000000,
