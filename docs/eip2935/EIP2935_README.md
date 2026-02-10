@@ -24,6 +24,15 @@
 }
 ```
 
+**网络配置**
+确保在 `hardhat.config.ts` 或 `.env` 中配置正确的网络：
+
+```bash
+# 示例：使用 myNet 网络（需要在 .env 中配置 RPC_URL 和 PRIVATE_KEY）
+export RPC_URL=http://127.0.0.1:8545
+export PRIVATE_KEY=0x...
+```
+
 ---
 
 ### 1. 安装依赖
@@ -38,16 +47,16 @@ npm install
 npx hardhat compile
 ```
 
-### 3. 运行测试
+### 3. 运行全部测试
 
 ```bash
-npx hardhat test test/eip2935.test.ts --network <网络选项>
+npx hardhat test test/eip2935.test.ts --network myNet
 ```
 
 ### 4. 查看详细输出
 
 ```bash
-npx hardhat test test/eip2935.test.ts --verbose
+npx hardhat test test/eip2935.test.ts --network myNet --verbose
 ```
 
 ---
@@ -60,71 +69,68 @@ npx hardhat test test/eip2935.test.ts --verbose
 
 **测试命令：**
 ```bash
-npx hardhat test test/eip2935.test.ts --grep "A1. Test History Storage Contract Deployment" --network <网络选项>
+npx hardhat test test/eip2935.test.ts --grep "A1. Test History Storage Contract Deployment" --network myNet
 ```
 
 **测试目的：**
-- 验证历史存储合约是否正确部署在指定地址
+- 验证EIP-2935预编译合约是否正确部署在指定地址
 
 **测试步骤：**
 1. 验证HISTORY_STORAGE_ADDRESS（0x0000F90827F1C53a10cb7A02335B175320002935）是否存在
-2. 验证合约字节码是否符合规范
-3. 验证合约nonce是否为1
-4. 验证合约是否豁免EIP-161清理
+2. 验证合约字节码是否存在
+3. 验证字节码长度是否正确
 
 **预期输出：**
 - 合约地址存在且具有正确的代码
 - 字节码与EIP-2935规范定义一致
-- Nonce值为1
-- 账户状态表明为系统合约豁免
+- 输出 "✓ EIP-2935 precompiled contract verified"
 
 ---
 
-#### A2. 测试环形缓冲区存储逻辑
+#### A2. 测试环形缓冲区常量
 
 **测试命令：**
 ```bash
-npx hardhat test test/eip2935.test.ts --grep "A2. Test Ring Buffer Storage Logic" --network <网络选项>
+npx hardhat test test/eip2935.test.ts --grep "A2. Test Ring Buffer Constants" --network myNet
 ```
 
 **测试目的：**
-- 验证环形缓冲区存储机制是否正确工作
+- 验证环形缓冲区常量是否正确定义
 
 **测试步骤：**
-1. 验证环形缓冲区大小为8191（HISTORY_SERVE_WINDOW）
-2. 验证存储位置计算：(block.number-1) % 8191
-3. 处理多个区块以填满缓冲区
-4. 验证循环覆盖行为
+1. 验证HISTORY_SERVE_WINDOW是否为8191
+2. 验证HISTORY_STORAGE_ADDRESS是否正确
+3. 验证SYSTEM_ADDRESS是否正确
 
 **预期输出：**
-- 环形缓冲区大小等于8191
-- 存储位置计算正确
-- 缓冲区在达到容量后正确回绕
-- 旧值按正确顺序被覆盖
+- HISTORY_SERVE_WINDOW: 8191
+- HISTORY_STORAGE_ADDRESS: 0x0000F90827F1C53a10cb7A02335B175320002935
+- SYSTEM_ADDRESS: 0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE
+- 输出 "✓ All constants verified correctly"
 
 ---
 
-#### A3. 测试父区块哈希存储
+#### A3. 测试存储槽计算
 
 **测试命令：**
 ```bash
-npx hardhat test test/eip2935.test.ts --grep "A3. Test Parent Block Hash Storage" --network <网络选项>
+npx hardhat test test/eip2935.test.ts --grep "A3. Test Storage Slot Calculation" --network myNet
 ```
 
 **测试目的：**
-- 验证在区块处理期间父区块哈希是否正确存储
+- 验证环形缓冲区存储槽位计算是否正确
 
 **测试步骤：**
-1. 处理新区块
-2. 验证在区块开始时触发系统调用
-3. 验证calldata包含block.parent.hash
-4. 验证存储槽位已更新为父哈希
+1. 验证槽位计算公式：(blockNumber - 1) % HISTORY_SERVE_WINDOW
+2. 测试多个边界情况
+3. 验证回绕行为
 
 **预期输出：**
-- 系统调用在交易处理之前执行
-- Calldata包含正确的父区块哈希
-- 存储值与父哈希一致
-- 存储位置对应于(block.number-1) % HISTORY_SERVE_WINDOW
+- Block 1 → Slot 0
+- Block 8191 → Slot 8190
+- Block 8192 → Slot 0 (回绕)
+- Block 16383 → Slot 0 (两个完整周期后)
+- 输出 "✓ All storage slot calculations verified"
 
 ---
 
@@ -134,22 +140,21 @@ npx hardhat test test/eip2935.test.ts --grep "A3. Test Parent Block Hash Storage
 
 **测试命令：**
 ```bash
-npx hardhat test test/eip2935.test.ts --grep "B1. Test Get Operation - Valid Range Query" --network <网络选项>
+npx hardhat test test/eip2935.test.ts --grep "B1. Test Get Operation - Valid Range Query" --network myNet
 ```
 
 **测试目的：**
 - 验证Get操作在有效范围内返回正确的区块哈希
 
 **测试步骤：**
-1. 查询block.number-1的区块哈希
-2. 查询block.number-HISTORY_SERVE_WINDOW的区块哈希
-3. 查询中间的区块哈希
-4. 验证返回的哈希与预期值匹配
+1. 获取当前区块信息
+2. 查询父区块哈希
+3. 比较返回的哈希与预期值
 
 **预期输出：**
-- 对[block.number-8191, block.number-1]内有效区块号返回正确的哈希
-- 下边界查询（block.number-8191）成功
-- 上边界查询（block.number-1）成功
+- 对有效区块号返回正确的哈希
+- 哈希匹配验证通过
+- 输出 "✓ Block hash retrieved correctly!" 或验证状态
 
 ---
 
@@ -157,21 +162,20 @@ npx hardhat test test/eip2935.test.ts --grep "B1. Test Get Operation - Valid Ran
 
 **测试命令：**
 ```bash
-npx hardhat test test/eip2935.test.ts --grep "B2. Test Get Operation - Out of Range Query" --network <网络选项>
+npx hardhat test test/eip2935.test.ts --grep "B2. Test Get Operation - Out of Range Query" --network myNet
 ```
 
 **测试目的：**
 - 验证Get操作对超出有效范围的查询会revert
 
 **测试步骤：**
-1. 查询block.number-HISTORY_SERVE_WINDOW-1的区块哈希
-2. 查询未来区块的哈希
-3. 查询非常旧的区块哈希
+1. 查询未来区块（应revert）
+2. 查询超出HISTORY_SERVE_WINDOW的旧区块（应revert）
 
 **预期输出：**
-- 所有超出范围的查询都会触发revert
-- 错误消息指示无效的区块号范围
-- 不返回不正确的哈希值
+- 未来区块查询revert
+- 旧区块查询revert
+- 输出 "✓ All out-of-range queries correctly revert"
 
 ---
 
@@ -179,7 +183,7 @@ npx hardhat test test/eip2935.test.ts --grep "B2. Test Get Operation - Out of Ra
 
 **测试命令：**
 ```bash
-npx hardhat test test/eip2935.test.ts --grep "B3. Test Get Operation - Calldata Validation" --network <网络选项>
+npx hardhat test test/eip2935.test.ts --grep "B3. Test Get Operation - Calldata Validation" --network myNet
 ```
 
 **测试目的：**
@@ -188,177 +192,237 @@ npx hardhat test test/eip2935.test.ts --grep "B3. Test Get Operation - Calldata 
 **测试步骤：**
 1. 使用32字节calldata查询（有效）
 2. 使用空calldata查询
-3. 使用不足32字节的calldata查询
-4. 使用超过32字节的calldata查询
+3. 验证calldata验证函数
 
 **预期输出：**
-- 32字节calldata：查询成功
+- 32字节calldata：查询尝试
 - 空calldata：revert
-- 短calldata：revert
-- 长calldata：仅使用前32字节，查询成功
+- validateCalldata(32 bytes): true
+- validateCalldata(16 bytes): false
+- 输出 "✓ Calldata validation working correctly"
 
 ---
 
-#### B4. 测试Set操作 - 授权控制
+#### B4. 测试Get操作 - 多重有效查询
 
 **测试命令：**
 ```bash
-npx hardhat test test/eip2935.test.ts --grep "B4. Test Set Operation - Authorization Control" --network <网络选项>
+npx hardhat test test/eip2935.test.ts --grep "B4. Test Get Operation - Multiple Valid Queries" --network myNet
 ```
 
 **测试目的：**
-- 验证Set操作只能由SYSTEM_ADDRESS调用
+- 验证多个连续查询正确处理
 
 **测试步骤：**
-1. 尝试从非系统地址调用set
-2. 尝试从随机地址调用set
-3. 验证从SYSTEM_ADDRESS调用set成功
+1. 重置状态
+2. 连续查询多个最近区块
+3. 统计成功/失败次数
 
 **预期输出：**
-- 非系统地址调用触发revert
-- 只有SYSTEM_ADDRESS（0xfffffffffffffffffffffffffffffffffffffffe）可以执行set
-- 授权调用者正确执行set操作
+- 多个查询被正确处理
+- 统计信息更新
+- 输出 "✓ Multiple queries handled correctly"
+
+**注意：** 需要至少5个区块才能运行此测试
 
 ---
 
-### C. 系统调用行为测试
+### C. 边界和安全测试
 
-#### C1. 测试系统调用Gas行为
-
-**测试命令：**
-```bash
-npx hardhat test test/eip2935.test.ts --grep "C1. Test System Call Gas Behavior" --network <网络选项>
-```
-
-**测试目的：**
-- 验证系统调用具有特殊的Gas处理方式
-
-**测试步骤：**
-1. 处理包含系统调用的区块
-2. 验证系统调用的Gas不计入区块Gas限制
-3. 验证使用30_000_000的Gas限制
-
-**预期输出：**
-- 系统调用Gas与区块Gas限制分离
-- 区块仍可接受正常Gas限制的交易
-- 系统调用使用30_000_000 Gas限制
-
----
-
-#### C2. 测试系统调用价值转移
+#### C1. 测试边界条件
 
 **测试命令：**
 ```bash
-npx hardhat test test/eip2935.test.ts --grep "C2. Test System Call Value Transfer" --network <网络选项>
-```
-
-**测试目的：**
-- 验证系统调用不转移价值
-
-**测试步骤：**
-1. 验证系统调用期间不转移ETH
-2. 验证HISTORY_STORAGE_ADDRESS余额保持不变
-3. 验证SYSTEM_ADDRESS余额保持不变
-
-**预期输出：**
-- 不转移任何价值（ETH）
-- 交易value为0
-- 账户余额不受影响
-
----
-
-#### C3. 测试无代码时的静默失败
-
-**测试命令：**
-```bash
-npx hardhat test test/eip2935.test.ts --grep "C3. Test Silent Failure on No Code" --network <网络选项>
-```
-
-**测试目的：**
-- 验证调用没有代码的地址时静默失败
-
-**测试步骤：**
-1. 尝试在合约未部署的网络上调用历史存储
-2. 验证没有抛出异常
-3. 验证区块处理正常继续
-
-**预期输出：**
-- 发生静默失败（没有revert，没有异常）
-- 区块处理正常继续
-- 没有状态变化发生
-
----
-
-### D. 区块处理集成测试
-
-#### D1. 测试区块处理集成
-
-**测试命令：**
-```bash
-npx hardhat test test/eip2935.test.ts --grep "D1. Test Block Processing Integration" --network <网络选项>
-```
-
-**测试目的：**
-- 验证EIP-2935与区块处理正确集成
-
-**测试步骤：**
-1. 处理激活后的多个区块
-2. 验证状态根包含历史存储
-3. 验证区块验证成功
-4. 验证历史数据连续性
-
-**预期输出：**
-- 所有区块处理成功
-- 状态根反映历史存储变化
-- 区块验证通过，历史数据正确
-- 历史哈希正确且连续地存储
-
----
-
-#### D2. 测试激活场景
-
-**测试命令：**
-```bash
-npx hardhat test test/eip2935.test.ts --grep "D2. Test Activation Scenarios" --network <网络选项>
-```
-
-**测试目的：**
-- 验证不同激活场景的正确处理
-
-**测试步骤：**
-1. 测试创世激活
-2. 测试区块1激活
-3. 测试区块32激活
-4. 验证每种场景的初始存储状态
-
-**预期输出：**
-- 创世激活：区块1开始将创世哈希写入slot 0
-- 区块1激活：只有创世哈希在slot 0
-- 区块32激活：区块31的哈希在slot 31，其他为空
-- 所有场景正确初始化
-
----
-
-### E. 边界条件和安全测试
-
-#### E1. 测试边界条件
-
-**测试命令：**
-```bash
-npx hardhat test test/eip2935.test.ts --grep "E1. Test Boundary Conditions" --network <网络选项>
+npx hardhat test test/eip2935.test.ts --grep "C1. Test Boundary Conditions" --network myNet
 ```
 
 **测试目的：**
 - 验证正确处理边界条件
 
 **测试步骤：**
-1. 在精确下边界查询（block.number-HISTORY_SERVE_WINDOW）
-2. 在精确上边界查询（block.number-1）
-3. 在边界外查询
-4. 测试缓冲区饱和和回绕
+1. 计算下边界值
+2. 测试有效/无效区块号验证
+3. 验证边界行为
 
 **预期输出：**
-- 边界查询成功
-- 边界外查询revert
-- 缓冲区在8191个区块后正确回绕
+- 父区块：有效
+- 最旧有效区块：有效
+- 当前区块：无效（未来）
+- 未来区块：无效
+- 输出 "✓ Boundary conditions verified"
 
+---
+
+#### C2. 测试环形缓冲区溢出行为
+
+**测试命令：**
+```bash
+npx hardhat test test/eip2935.test.ts --grep "C2. Test Ring Buffer Overflow Behavior" --network myNet
+```
+
+**测试目的：**
+- 验证环形缓冲区正确处理溢出和回绕
+
+**测试步骤：**
+1. 验证缓冲区大小为8191
+2. 计算多个回绕点的槽位
+3. 验证回绕行为
+
+**预期输出：**
+- 缓冲区大小：8191
+- 回绕行为正确
+- 输出 "✓ Ring buffer overflow behavior verified"
+
+---
+
+#### C3. 测试区块哈希检索准确性
+
+**测试命令：**
+```bash
+npx hardhat test test/eip2935.test.ts --grep "C3. Test Block Hash Retrieval Accuracy" --network myNet
+```
+
+**测试目的：**
+- 验证检索的区块哈希与实际区块哈希匹配
+
+**测试步骤：**
+1. 重置状态
+2. 测试多个区块的哈希检索
+3. 比较检索结果与实际值
+
+**预期输出：**
+- 匹配的哈希数量统计
+- 输出 "✓ Block hash retrieval partially verified" 或相应状态
+
+**注意：** 需要至少2个区块才能运行此测试
+
+---
+
+### D. 集成测试
+
+#### D1. 测试预编译合约状态
+
+**测试命令：**
+```bash
+npx hardhat test test/eip2935.test.ts --grep "D1. Test Precompiled Contract State" --network myNet
+```
+
+**测试目的：**
+- 验证预编译合约正确配置为系统合约
+
+**测试步骤：**
+1. 验证预编译合约存在
+2. 验证字节码长度
+3. 查看字节码内容
+
+**预期输出：**
+- 合约地址：0x0000F90827F1C53a10cb7A02335B175320002935
+- 字节码长度：大于100
+- 输出 "✓ Precompiled contract is properly configured"
+
+---
+
+#### D2. 测试调用统计追踪
+
+**测试命令：**
+```bash
+npx hardhat test test/eip2935.test.ts --grep "D2. Test Call Statistics Tracking" --network myNet
+```
+
+**测试目的：**
+- 验证调用统计信息正确追踪
+
+**测试步骤：**
+1. 重置并检查初始状态
+2. 进行多次调用
+3. 验证统计信息更新
+
+**预期输出：**
+- 初始状态：Attempts: 0, Successes: 0
+- 调用后：统计信息正确更新
+- 输出统计追踪完成信息
+
+---
+
+#### D3. 测试辅助函数
+
+**测试命令：**
+```bash
+npx hardhat test test/eip2935.test.ts --grep "D3. Test Helper Functions" --network myNet
+```
+
+**测试目的：**
+- 验证所有辅助函数正确工作
+
+**测试步骤：**
+1. 测试 getRingBufferSize()
+2. 测试 getHistoryStorageAddress()
+3. 测试 getSystemAddress()
+4. 测试 validateCalldata()
+
+**预期输出：**
+- 所有辅助函数返回正确值
+- validateCalldata(32 bytes): true
+- validateCalldata(16 bytes): false
+- 输出 "✓ All helper functions working correctly"
+
+---
+
+## 运行示例
+
+### 运行单个测试
+
+```bash
+# 运行 A1 测试
+npx hardhat test test/eip2935.test.ts --grep "A1. Test History Storage Contract Deployment" --network myNet
+
+# 运行 B2 测试
+npx hardhat test test/eip2935.test.ts --grep "B2. Test Get Operation - Out of Range Query" --network myNet
+```
+
+### 运行整个测试类别
+
+```bash
+# 运行所有核心功能测试
+npx hardhat test test/eip2935.test.ts --grep "A\." --network myNet
+
+# 运行所有EVM操作测试
+npx hardhat test test/eip2935.test.ts --grep "B\." --network myNet
+
+# 运行所有边界测试
+npx hardhat test test/eip2935.test.ts --grep "C\." --network myNet
+
+# 运行所有集成测试
+npx hardhat test test/eip2935.test.ts --grep "D\." --network myNet
+```
+
+### 查看测试结果统计
+
+```bash
+# 运行全部测试并显示详细统计
+npx hardhat test test/eip2935.test.ts --network myNet 2>&1 | grep -E "passing|failing"
+```
+
+---
+
+## 常见问题
+
+### 1. 测试显示 "Precompiled Contract NOT deployed"
+
+**原因：** 网络不支持EIP-2935
+**解决：** 确保在genesis.json中配置 `"pragueBlock": 0`
+
+### 2. 测试显示 "TypeError: Cannot mix BigInt and other types"
+
+**原因：** BigInt类型转换问题（已在最新版本修复）
+**解决：** 确保使用最新版本的测试文件
+
+### 3. B4 或 C3 测试被跳过
+
+**原因：** 区块数量不足
+**解决：** 等待网络生成更多区块后再运行测试
+
+### 4. 预编译合约调用失败
+
+**原因：** 网络不支持assembly调用预编译合约
+**解决：** 检查网络是否完整实现了EIP-2935

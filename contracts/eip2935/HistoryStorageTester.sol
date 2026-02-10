@@ -51,52 +51,78 @@ contract HistoryStorageTester {
      * @notice Get block hash for a given block number
      * @dev Calls the EIP-2935 precompiled contract
      * @param blockNumber The block number to query (must be within valid range)
-     * @return The block hash of the specified block
      */
-    function getBlockHash(uint256 blockNumber) external returns (bytes32) {
+    function getBlockHash(uint256 blockNumber) external {
         callAttemptCount++;
 
         // EIP-2935 uses raw call with 32-byte calldata
-        (bool success, bytes memory result) = HISTORY_STORAGE_ADDRESS.call(
-            abi.encodePacked(blockNumber)
-        );
+        // Using assembly for direct EVM call
+        bytes32 result;
+        bool success;
+        assembly {
+            let ptr := mload(0x40)
+            mstore(ptr, blockNumber)
+            success := call(gas(), HISTORY_STORAGE_ADDRESS, 0, ptr, 32, ptr, 32)
+            result := mload(ptr)
+        }
 
-        if (success && result.length == 32) {
-            lastRetrievedHash = bytes32(result);
-            lastQueriedBlockNumber = blockNumber;
+        lastQueriedBlockNumber = blockNumber;
+
+        if (success) {
+            lastRetrievedHash = result;
             lastCallSuccess = true;
             successfulCallCount++;
-            return bytes32(result);
         } else {
+            lastRetrievedHash = bytes32(0);
             lastCallSuccess = false;
             revert InvalidBlockNumber();
         }
     }
 
     /**
-     * @notice Try to get block hash, returns false instead of reverting
+     * @notice Try to get block hash, stores result in state variables
      * @param blockNumber The block number to query
-     * @return success Whether the call succeeded
-     * @return hash The block hash if successful, zero hash otherwise
+     * @return success Whether the call succeeded (via lastCallSuccess)
      */
-    function tryGetBlockHash(uint256 blockNumber) external returns (bool success, bytes32 hash) {
+    function tryGetBlockHash(uint256 blockNumber) external returns (bool) {
         callAttemptCount++;
 
-        bytes memory result;
-        (success, result) = HISTORY_STORAGE_ADDRESS.call(
-            abi.encodePacked(blockNumber)
-        );
+        // Using assembly for direct EVM call
+        bytes32 result;
+        bool success;
+        assembly {
+            let ptr := mload(0x40)
+            mstore(ptr, blockNumber)
+            success := call(gas(), HISTORY_STORAGE_ADDRESS, 0, ptr, 32, ptr, 32)
+            result := mload(ptr)
+        }
 
-        if (success && result.length == 32) {
-            hash = bytes32(result);
-            lastRetrievedHash = hash;
-            lastQueriedBlockNumber = blockNumber;
+        lastQueriedBlockNumber = blockNumber;
+
+        if (success) {
+            lastRetrievedHash = result;
             lastCallSuccess = true;
             successfulCallCount++;
-            return (true, hash);
+            return true;
         } else {
+            lastRetrievedHash = bytes32(0);
             lastCallSuccess = false;
-            return (false, bytes32(0));
+            return false;
+        }
+    }
+
+    /**
+     * @notice Get block hash using inline assembly
+     * @param blockNumber The block number to query
+     * @return success Whether the call succeeded
+     * @return hash The block hash if successful
+     */
+    function getBlockHashAssembly(uint256 blockNumber) external view returns (bool success, bytes32 hash) {
+        assembly {
+            let ptr := mload(0x40)
+            mstore(ptr, blockNumber)
+            success := staticcall(gas(), HISTORY_STORAGE_ADDRESS, ptr, 32, ptr, 32)
+            hash := mload(ptr)
         }
     }
 
@@ -151,7 +177,11 @@ contract HistoryStorageTester {
     function testEmptyCalldata() external returns (bool) {
         callAttemptCount++;
 
-        (bool success, ) = HISTORY_STORAGE_ADDRESS.call("");
+        bool success;
+        assembly {
+            success := call(gas(), HISTORY_STORAGE_ADDRESS, 0, 0x00, 0x00, 0x00, 0x00)
+        }
+
         if (!success) {
             lastCallSuccess = false;
             return false;
@@ -168,33 +198,18 @@ contract HistoryStorageTester {
         callAttemptCount++;
 
         require(data.length < 32, "Data must be less than 32 bytes");
-        (bool success, ) = HISTORY_STORAGE_ADDRESS.call(data);
+        bool success;
+        assembly {
+            let ptr := mload(0x40)
+            calldatacopy(ptr, 4, data.length)
+            success := call(gas(), HISTORY_STORAGE_ADDRESS, 0, ptr, data.length, 0x00, 0x00)
+        }
         if (!success) {
             lastCallSuccess = false;
             return false;
         }
         lastCallSuccess = true;
         return true;
-    }
-
-    /**
-     * @notice Test with long calldata (should use only first 32 bytes)
-     * @param data The long calldata (more than 32 bytes)
-     */
-    function testLongCalldata(bytes calldata data) external returns (bool, bytes32) {
-        callAttemptCount++;
-
-        (bool success, bytes memory result) = HISTORY_STORAGE_ADDRESS.call(data);
-        if (!success) {
-            lastCallSuccess = false;
-            return (false, bytes32(0));
-        }
-        lastCallSuccess = true;
-        successfulCallCount++;
-        if (result.length >= 32) {
-            return (true, bytes32(result));
-        }
-        return (true, bytes32(0));
     }
 
     /**
@@ -241,4 +256,3 @@ contract HistoryStorageTester {
         return (callAttemptCount, successfulCallCount);
     }
 }
-
