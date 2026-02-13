@@ -45,7 +45,6 @@ tx.gasUsed = 21000 + max(
   "config": {
     "chainId": 20986,
     "pragueBlock": 0,
-    "eip7623Block": 0,
     ...
   }
 }
@@ -88,7 +87,6 @@ npx hardhat test test/eip7623.test.ts --grep "A1. Test Data-Heavy Transaction Pa
 
 **Test Purpose:**
 - 验证当交易的 calldata 很大但执行 gas 很低时，使用 floor cost 计算
-- **这是 EIP-7623 的核心测试**
 
 **Test Steps:**
 1. 构造一个大 calldata 交易（1000 字节非零数据）
@@ -107,11 +105,11 @@ expect(gasUsed).to.be.gte(61000n);
 
 ---
 
-#### A2. Test Zero vs Non-Zero Byte Cost Ratio
+#### A2. Test Non-Zero Bytes Pay Floor Cost
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7623.test.ts --grep "A2. Test Zero vs Non-Zero Byte Cost Ratio" --network myNet
+npx hardhat test test/eip7623.test.ts --grep "A2. Test Non-Zero Bytes Pay Floor Cost" --network myNet
 ```
 
 **Test Purpose:**
@@ -132,7 +130,6 @@ npx hardhat test test/eip7623.test.ts --grep "A2. Test Zero vs Non-Zero Byte Cos
 expect(gasUsed2).to.be.gte(23560n);  // Non-zero bytes must meet floor cost
 ```
 
-**Note:** 此测试验证的是 EIP-7623 的核心机制，而非零字节与零字节之间的比例（该比例无论是否启用 EIP-7623 都是 1:4）。
 
 ---
 
@@ -242,8 +239,6 @@ npx hardhat test test/eip7623.test.ts --network myNet 2>&1 | grep -E "passing|fa
 
 ## Test Implementation Notes
 
-- **无合约依赖**: 测试使用纯 ETH 转账交易，不需要部署任何智能合约
-- **直接验证**: 通过检查实际 gas 消耗来判断 EIP-7623 是否启用
 - **自然失败**: 如果 EIP-7623 未启用，关键断言会失败（gas < floor cost）
 - **验证方法**: 
   - A1: 1000字节非零 calldata，必须 >= 61000 gas

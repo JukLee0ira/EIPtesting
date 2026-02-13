@@ -78,8 +78,8 @@ describe("EIP-7623 Complete Test Suite", function () {
    * A1. Test Data-Heavy Transaction Pays Floor Cost
    *
    * KEY TEST: This is the main test for EIP-7623.
-   * Without EIP-7623: ~25000 gas (21000 + 1000*4)
-   * With EIP-7623: >= 61000 gas (21000 + floor(1000*4*10))
+   * Without EIP-7623: ~37000 gas (21000 + 1000*4*4)
+   * With EIP-7623: >= 61000 gas (21000 + 1000*4*10)
    */
   describe("A. Calldata Cost Calculation Tests", function () {
     it("A1. Test Data-Heavy Transaction Pays Floor Cost", async function () {
@@ -110,7 +110,6 @@ describe("EIP-7623 Complete Test Suite", function () {
       const tokensInCalldata = BigInt(calldataSize) * STANDARD_TOKEN_COST;
       
       // WITHOUT EIP-7623: 21000 + 4 * tokens = 21000 + 4*4000 = 21000 + 16000 = 37000
-      // Note: This is the intrinsic gas, actual may be slightly higher due to execution
       const gasWithoutEIP7623 = BASE_GAS + STANDARD_TOKEN_COST * tokensInCalldata;
       
       // WITH EIP-7623: 21000 + 10 * tokens = 21000 + 10*4000 = 21000 + 40000 = 61000
@@ -121,82 +120,49 @@ describe("EIP-7623 Complete Test Suite", function () {
       console.log("Gas WITH EIP-7623 (floor):", gasWithEIP7623Floor.toString());
 
       // KEY ASSERTION: Gas must be >= floor cost to prove EIP-7623 is enabled
-      // If EIP-7623 is NOT enabled, gas will be close to gasWithoutEIP7623
-      // If EIP-7623 IS enabled, gas will be >= gasWithEIP7623Floor
       expect(
         gasUsed,
         `EIP-7623 not enabled: gas ${gasUsed} < floor ${gasWithEIP7623Floor}. Expected >= ${gasWithEIP7623Floor} with EIP-7623`
       ).to.be.gte(gasWithEIP7623Floor);
     });
 
-    it("A2. Test Zero vs Non-Zero Byte Cost Ratio", async function () {
-      // Test 1: Only zero bytes (0x00)
-      const zeroBytesSize = 64;
-      const zeroBytesCalldata = "0x" + "00".repeat(zeroBytesSize);
-      
-      // Test 2: Only non-zero bytes (0xab)
+    it("A2. Test Non-Zero Bytes Pay Floor Cost", async function () {
+      // Test: Only non-zero bytes (64 bytes)
       const nonZeroBytesSize = 64;
       const nonZeroBytesCalldata = "0x" + "ab".repeat(nonZeroBytesSize);
 
-      const tx1 = await owner.sendTransaction({
-        to: ownerAddress,
-        value: 0,
-        data: zeroBytesCalldata,
-      });
-      const receipt1 = await tx1.wait();
-
-      const tx2 = await owner.sendTransaction({
+      const tx = await owner.sendTransaction({
         to: ownerAddress,
         value: 0,
         data: nonZeroBytesCalldata,
       });
-      const receipt2 = await tx2.wait();
+      const receipt = await tx.wait();
 
-      if (!receipt1 || !receipt2) {
+      if (!receipt) {
         throw new Error("Transaction receipt is null");
       }
 
-      const gasUsed1 = receipt1.gasUsed;
-      const gasUsed2 = receipt2.gasUsed;
+      const gasUsed = receipt.gasUsed;
 
-      console.log("\n--- A2: Zero vs Non-Zero Byte Cost (64 bytes) ---");
-      console.log("Zero bytes gas:", gasUsed1.toString());
-      console.log("Non-zero bytes gas:", gasUsed2.toString());
+      console.log("\n--- A2: Non-Zero Byte Cost (64 bytes) ---");
+      console.log("Non-zero bytes gas:", gasUsed.toString());
 
       // Calculate expected values
-      // With EIP-7623:
-      // - Zero: 64 bytes * 1 token/byte * 10 = 640 floor
-      // - Non-zero: 64 bytes * 4 tokens/byte * 10 = 2560 floor
-      // Ratio should be 1:4
-
-      // Without EIP-7623:
-      // - Zero: 64 * 1 * 4 = 256
-      // - Non-zero: 64 * 4 * 4 = 1024
-      // Ratio is still 1:4
-
-      // The difference should be significant with EIP-7623
-      const zeroTokens = BigInt(zeroBytesSize) * 1n; // zero byte = 1 token
       const nonZeroTokens = BigInt(nonZeroBytesSize) * STANDARD_TOKEN_COST; // non-zero = 4 tokens
       
-      // Floor costs with EIP-7623
-      const zeroFloor = BASE_GAS + TOTAL_COST_FLOOR_PER_TOKEN * zeroTokens;
+      // Floor cost with EIP-7623
       const nonZeroFloor = BASE_GAS + TOTAL_COST_FLOOR_PER_TOKEN * nonZeroTokens;
 
-      // Standard costs without EIP-7623
-      const zeroStandard = BASE_GAS + STANDARD_TOKEN_COST * zeroTokens;
+      // Standard cost without EIP-7623
       const nonZeroStandard = BASE_GAS + STANDARD_TOKEN_COST * nonZeroTokens;
 
-      console.log("Zero standard cost (no EIP):", zeroStandard.toString());
-      console.log("Zero floor cost (EIP-7623):", zeroFloor.toString());
       console.log("Non-zero standard cost (no EIP):", nonZeroStandard.toString());
       console.log("Non-zero floor cost (EIP-7623):", nonZeroFloor.toString());
 
       // CRITICAL ASSERTION: Non-zero bytes must meet EIP-7623 floor cost
-      // Without EIP-7623: gasUsed2 ≈ 22024 < 23560 → TEST FAILS (correctly!)
-      // With EIP-7623: gasUsed2 >= 23560 → TEST PASSES (correctly!)
       expect(
-        gasUsed2,
-        `Non-zero bytes should use EIP-7623 floor cost (>= ${nonZeroFloor}). Got ${gasUsed2}. Without EIP-7623, expected ~${nonZeroStandard}`
+        gasUsed,
+        `Non-zero bytes should use EIP-7623 floor cost (>= ${nonZeroFloor}). Got ${gasUsed}. Without EIP-7623, expected ~${nonZeroStandard}`
       ).to.be.gte(nonZeroFloor);
     });
   });
@@ -300,8 +266,5 @@ describe("EIP-7623 Complete Test Suite", function () {
   // ============================================================
   after(function () {
     console.log("\n=== EIP-7623 Test Suite Completed ===");
-    console.log("Note: These tests verify gas consumption patterns.");
-    console.log("For full EIP-7623 compliance, verify on a network with");
-    console.log("EIP-7623 activated in the hardfork configuration.");
   });
 });
