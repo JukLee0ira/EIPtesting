@@ -2,7 +2,7 @@
 
 ## Test Overview
 
-本测试套件实现了 EIP-7623 核心功能测试，该提案旨在增加 calldata 成本以减少最大区块大小。测试涵盖 6 个核心测试维度，共计 10 个测试用例。
+本测试套件实现了 EIP-7623 核心功能测试，该提案旨在增加 calldata 成本以减少最大区块大小。共计 9 个测试用例。
 
 **Test Framework**: Hardhat + Ethers.js v6  
 **Solidity Version**: 0.8.28
