@@ -105,10 +105,19 @@ describe("EIP-2935 Complete Test Suite", function () {
   // SETUP: Deploy test contract
   // ============================================================
   beforeEach(async function () {
-    // Skip all tests if precompiled doesn't exist
+    // Fail all tests if precompiled doesn't exist
     if (!precompiledExists) {
-      this.skip();
-      return;
+      throw new Error(
+        [
+          "EIP-2935 precompiled contract is NOT deployed on this network.",
+          "This indicates the network does not support EIP-2935 yet.",
+          "",
+          "To enable EIP-2935:",
+          "1. Configure 'pragueBlock' in genesis.json",
+          "2. Restart the network node",
+          "3. Re-run tests",
+        ].join("\n")
+      );
     }
 
     // Deploy the test contract
