@@ -112,10 +112,6 @@ describe("EIP-2935 Complete Test Suite", function () {
           "EIP-2935 precompiled contract is NOT deployed on this network.",
           "This indicates the network does not support EIP-2935 yet.",
           "",
-          "To enable EIP-2935:",
-          "1. Configure 'pragueBlock' in genesis.json",
-          "2. Restart the network node",
-          "3. Re-run tests",
         ].join("\n")
       );
     }

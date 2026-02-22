@@ -93,6 +93,18 @@ contract CalldataTester {
     }
 
     /**
+     * @notice Batch write to storage - for EIP-7623 execution-heavy tests
+     * @dev Each SSTORE costs significant gas (~20000 for cold storage)
+     *      This is used to test that execution gas is counted in EIP-7623 formula
+     */
+    function batchWriteStorage(uint256 count) external returns (uint256) {
+        for (uint256 i = 0; i < count; i++) {
+            storageSlots[i] = i;
+        }
+        return count;
+    }
+
+    /**
      * @notice Read from storage - cheaper than write
      */
     function readStorage(uint256 slot) external view returns (uint256) {

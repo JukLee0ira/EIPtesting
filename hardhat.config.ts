@@ -54,7 +54,7 @@ const config: HardhatUserConfig = {
     devnet: {
       url: "http://vmi651343.contaboserver.net:31111",
       accounts,
-      timeout: 60000,
+      timeout: 15000,  // 15 seconds timeout for devnet
       gasPrice: 300000000000,
       gas: 2100000,
       chainId: 551,
@@ -75,7 +75,7 @@ const config: HardhatUserConfig = {
     },
   },
   mocha: {
-    timeout: 100000,
+    timeout: 30000,
   },
 };
 
