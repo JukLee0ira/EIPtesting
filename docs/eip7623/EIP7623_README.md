@@ -2,25 +2,25 @@
 
 ## Test Overview
 
-本测试套件实现了 EIP-7623 核心功能测试，该提案旨在增加 calldata 成本以减少最大区块大小。共计 5 个测试用例。
+This test suite tests EIP-7623 core functions. The proposal aims to increase calldata cost to reduce max block size. Total: 7 test cases.
 
-**测试方法**: 直接使用 ETH 转账交易携带不同大小的 calldata，验证 gas 消耗模式。
+**Test Method**: Send real ETH transfer transactions with different calldata sizes. Verify gas usage patterns. 
 
 **Test Framework**: Hardhat + Ethers.js v6  
-**Solidity Version**: 不需要
+**Solidity Version**: 0.8.28
 
 ---
 
 ## EIP-7623 Specification Summary
 
-EIP-7623 通过引入 `TOTAL_COST_FLOOR_PER_TOKEN` 参数来增加数据密集型交易的 calldata 成本：
+EIP-7623 adds `TOTAL_COST_FLOOR_PER_TOKEN` to increase calldata cost for data-heavy transactions:
 
-- **参数**:
-  - `STANDARD_TOKEN_COST = 4` (标准 token 成本)
-  - `TOTAL_COST_FLOOR_PER_TOKEN = 10` (每 token 的总成本下限)
+- **Parameters**:
+  - `STANDARD_TOKEN_COST = 4`
+  - `TOTAL_COST_FLOOR_PER_TOKEN = 10`
   - `tokens_in_calldata = zero_bytes + nonzero_bytes * 4`
 
-- **新 Gas 计算公式**:
+- **New Gas Formula**:
 ```
 tx.gasUsed = 21000 + max(
     STANDARD_TOKEN_COST * tokens_in_calldata + execution_gas_used,
@@ -28,17 +28,17 @@ tx.gasUsed = 21000 + max(
 )
 ```
 
-- **影响**:
-  - 数据密集型交易（calldata 多，执行 gas 少）: 成本从 4/16 升至 10/40 gas/字节
-  - 执行密集型交易（执行 gas 多）: 成本保持 4/16 gas/字节
-  - 常规 ETH 转账完全不受影响
+- **Impact**:
+  - Data-heavy transactions (lots of calldata, low execution gas): cost goes from 4/16 to 10/40 gas/byte
+  - Execution-heavy transactions (high execution gas): cost stays at 4/16 gas/byte
+  - Regular ETH transfers are NOT affected
 
 ---
 
 ## Running Tests
 
 **Prerequisites**
-- 确保网络支持 EIP-7623 升级。如果在私有网络上测试，需要在 genesis 配置中启用：
+- Make sure the network supports EIP-7623 upgrade. For private networks, enable in genesis config:
 
 ```json
 {
@@ -50,7 +50,7 @@ tx.gasUsed = 21000 + max(
 }
 ```
 
-- **设置环境变量**: `RPC_URL` + 至少 2 个私钥 (`PRIVATE_KEYS=key1,key2`, 参考根目录 `example.env`)。
+- **Set env vars**: `RPC_URL` + at least 2 private keys (`PRIVATE_KEYS=key1,key2`, see `example.env` in root).
 
 ---
 
@@ -86,17 +86,17 @@ npx hardhat test test/eip7623.test.ts --grep "A1. Test Data-Heavy Transaction Pa
 ```
 
 **Test Purpose:**
-- 验证当交易的 calldata 很大但执行 gas 很低时，使用 floor cost 计算
+- Check that floor cost is used when calldata is large but execution gas is low
 
 **Test Steps:**
-1. 构造一个大 calldata 交易（1000 字节非零数据）
-2. 发送交易并获取实际消耗的 gas
-3. 计算 floor cost: `10 * (zero_bytes + nonzero_bytes * 4)`
-4. 断言实际 gas >= floor cost
+1. Create a large calldata transaction (1000 bytes of non-zero data)
+2. Send transaction and get actual gas used
+3. Calculate floor cost: `10 * (zero_bytes + nonzero_bytes * 4)`
+4. Assert actual gas >= floor cost
 
 **Expected Output:**
-- EIP-7623 未启用: ~37000 gas (21000 + 1000*4*4)
-- EIP-7623 启用: >= 61000 gas (21000 + 1000*4*10)
+- EIP-7623 NOT enabled: ~37000 gas (21000 + 1000*4*4)
+- EIP-7623 enabled: >= 61000 gas (21000 + 1000*4*10)
 
 **Assertion:**
 ```typescript
@@ -113,13 +113,13 @@ npx hardhat test test/eip7623.test.ts --grep "A2. Test Non-Zero Bytes Pay Floor 
 ```
 
 **Test Purpose:**
-- 验证 EIP-7623 对 non-zero 字节应用 floor cost (10 gas/token)
-- **这是验证 EIP-7623 是否启用的关键测试之一**
+- Check that EIP-7623 applies floor cost to non-zero bytes (10 gas/token)
+- **This is a key test to verify EIP-7623 is enabled**
 
 **Test Steps:**
-1. 发送仅包含 zero bytes 的交易（64 字节，值为 0x00）
-2. 发送仅包含 non-zero bytes 的交易（64 字节，值为 0xab）
-3. 断言 non-zero 字节满足 EIP-7623 floor cost (>= 23560 gas)
+1. Send transaction with only zero bytes (64 bytes, value 0x00)
+2. Send transaction with only non-zero bytes (64 bytes, value 0xab)
+3. Assert non-zero bytes meet EIP-7623 floor cost (>= 23560 gas)
 
 **Expected Output:**
 - Without EIP-7623: ~22024 gas (21000 + 64*4*4)
@@ -129,7 +129,6 @@ npx hardhat test test/eip7623.test.ts --grep "A2. Test Non-Zero Bytes Pay Floor 
 ```typescript
 expect(gasUsed2).to.be.gte(23560n);  // Non-zero bytes must meet floor cost
 ```
-
 
 ---
 
@@ -143,15 +142,15 @@ npx hardhat test test/eip7623.test.ts --grep "B2. Test Regular ETH Transfer Unaf
 ```
 
 **Test Purpose:**
-- 验证常规 ETH 转账（无 calldata）不受 EIP-7623 影响
+- Check that regular ETH transfers (no calldata) are NOT affected by EIP-7623
 
 **Test Steps:**
-1. 发送 0 ETH 转账交易（无 calldata: `0x`）
-2. 验证 gas 消耗 = 21000
+1. Send 0 ETH transfer (no calldata: `0x`)
+2. Verify gas used = 21000
 
 **Expected Output:**
-- Gas 消耗 = 21000（基础费用）
-- 交易成功
+- Gas used = 21000 (base fee)
+- Transaction succeeds
 
 ---
 
@@ -165,15 +164,15 @@ npx hardhat test test/eip7623.test.ts --grep "C1. Test Pure Empty Calldata" --ne
 ```
 
 **Test Purpose:**
-- 验证空 calldata 的特殊情况
+- Check the special case of empty calldata
 
 **Test Steps:**
-1. 发送无 calldata 的交易
-2. 验证 gas 计算正常
+1. Send transaction with no calldata
+2. Verify gas calculation works
 
 **Expected Output:**
 - tokens_in_calldata = 0
-- 基础 gas = 21000
+- Base gas = 21000
 
 ---
 
@@ -185,15 +184,58 @@ npx hardhat test test/eip7623.test.ts --grep "C2. Test Medium Calldata" --networ
 ```
 
 **Test Purpose:**
-- 验证中等大小 calldata（100 字节）的 gas 消耗
+- Check gas usage for medium calldata (100 bytes)
 
 **Test Steps:**
-1. 发送 100 字节非零 calldata 的交易
-2. 验证 gas 满足 floor cost
+1. Send transaction with 100 bytes of non-zero calldata
+2. Verify gas meets floor cost
 
 **Expected Output:**
 - Floor cost: 25000 gas (21000 + 100*4*10)
-- 实际 gas >= 25000
+- Actual gas >= 25000
+
+---
+
+#### C3. Test Pure Zero Bytes
+
+**Test Command:**
+```bash
+npx hardhat test test/eip7623.test.ts --grep "C3. Test Pure Zero Bytes" --network myNet
+```
+
+**Test Purpose:**
+- Check EIP-7623 floor cost for zero bytes
+- EIP-7623 treats zero and non-zero bytes differently:
+  - Zero byte: 1 token (standard) → 10 tokens (floor)
+  - Non-zero byte: 4 tokens (standard) → 40 tokens (floor)
+
+**Test Steps:**
+1. Send pure zero byte transaction (64 bytes 0x00)
+2. Verify gas meets floor cost
+
+**Expected Output:**
+- Without EIP-7623: 21064 gas (21000 + 64*1)
+- With EIP-7623: 21640 gas (21000 + 64*10)
+
+---
+
+#### C4. Test Mixed Calldata (Zero + Non-Zero Bytes)
+
+**Test Command:**
+```bash
+npx hardhat test test/eip7623.test.ts --grep "C4. Test Mixed Calldata" --network myNet
+```
+
+**Test Purpose:**
+- Check EIP-7623 handles mixed calldata (zero bytes + non-zero bytes)
+
+**Test Steps:**
+1. Send mixed calldata transaction (32 zero bytes + 32 non-zero bytes)
+2. Verify gas meets floor cost
+
+**Expected Output:**
+- Tokens = 32*1 + 32*4 = 160
+- Floor cost: 22600 gas (21000 + 160*10)
 
 ---
 
@@ -234,13 +276,5 @@ npx hardhat test test/eip7623.test.ts --network myNet 2>&1 | grep -E "passing|fa
 | B2: ETH transfer | 21000 gas | 21000 gas |
 | C1: Empty calldata | 21000 gas | 21000 gas |
 | C2: Medium calldata (100 bytes) | ~22600 gas | >= 25000 gas |
-
----
-
-## Test Implementation Notes
-
-- **自然失败**: 如果 EIP-7623 未启用，关键断言会失败（gas < floor cost）
-- **验证方法**: 
-  - A1: 1000字节非零 calldata，必须 >= 61000 gas
-  - A2: 64字节非零 calldata，必须 >= 23560 gas  
-  - C2: 100字节非零 calldata，必须 >= 25000 gas
+| C3: Pure zero bytes (64 bytes) | 21064 gas | 21640 gas |
+| C4: Mixed (32+32 bytes) | 21160 gas | >= 22600 gas |
