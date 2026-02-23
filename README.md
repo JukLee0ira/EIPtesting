@@ -91,8 +91,8 @@ EIPtesting/
 **Documentation**:
 - [Test Guide](docs/eip7702/EIP7702_README.md)
 - Test Reports: 
-  - [Private Network Report (ZH)](docs/eip7702/EIP7702_Test_Report(Private_Net)_ZH.md)
-  - [Private Network Report (EN)](docs/eip7702/EIP7702_Test_Report_EN.md)
+  - [Devnet Report](docs/eip7702/EIP7702_Test_Report_devnet.md)
+  - [Private Network Report](docs/eip7702/EIP7702_Test_Report_Private_Net.md)
 
 **Test Coverage**:
 - ✓ Core functionality: Code delegation setup and function calls
@@ -108,9 +108,6 @@ EIPtesting/
 
 **Network Validation**: 
 - ✅ Tests **verify EIP-7702 features** by checking EOA code delegation (`0xef0100` + address)
-- ✅ Attempts to send Type 0x04 transactions with authorization_list
-- ❌ Will **fail naturally** on networks without EIP-7702 support
-- ⚠️  Currently fails on all tested networks (including myNet) - indicates nodes may not have EIP-7702 enabled
 - 📝 To pass tests, network must:
   - Support Type 0x04 transactions
   - Process authorization_list and set EOA code to delegation marker
