@@ -140,6 +140,7 @@ We compared the support for EIP-7702 across different networks using the same te
 - **Expected**: Final delegation points to last valid target contract.
 
 **Test Result:**
+
 <img width="725" height="153" alt="image" src="https://github.com/user-attachments/assets/aeda2837-93a1-4f65-a8b1-add1a4fa814b" />
 
 
