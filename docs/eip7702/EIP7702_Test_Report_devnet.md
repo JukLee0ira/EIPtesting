@@ -64,26 +64,8 @@ We compared the support for EIP-7702 across different networks using the same te
 
 **Test Result:**
 
-```text
-Initial EOA nonce: 0
+<img width="918" height="764" alt="image" src="https://github.com/user-attachments/assets/ace2d2c7-bc5a-4cd7-9d85-fd3a5978092c" />
 
-【Before Delegation】
-EOA address: 0x562c2C2AF81D98fe446a289f804c5aD7Ca6a9260
-EOA code: 0x (empty, normal EOA)
-Implementation contract: 0x1be54400E2bF72102000801841c203ACdDef1129
-
-【After Delegation - EIP-7702 Verification】
-Target contract address: 0x1be54400E2bF72102000801841c203ACdDef1129
-Expected EOA code: 0xef01001be54400e2bf72102000801841c203acddef1129
-Actual EOA code: 0xef01001be54400e2bf72102000801841c203acddef1129
-Code match: ✓ YES
-
-【Verification】
-Value set via delegated EOA: 12345
-✓ EIP-7702 delegation verified successfully
-
-✓ Test passed
-```
 
 #### A2. Call Contract Functions Through Delegated EOA
 - **Purpose**: Verify that delegated EOA can execute `SimpleLogic` functions.
@@ -91,19 +73,8 @@ Value set via delegated EOA: 12345
 
 **Test Result:**
 
-```text
-Transaction hash: 0xf75c27784ffa2254f3c3326e3933d9dc3809c3900b061656ea51be00842fde78
-Block number: 3144055
-Gas used: 25370
-Sender address: 0x562c2C2AF81D98fe446a289f804c5aD7Ca6a9260
-Contract address: 0x562c2C2AF81D98fe446a289f804c5aD7Ca6a9260
-Transaction status: Success (1)
+<img width="806" height="322" alt="image" src="https://github.com/user-attachments/assets/b16d7fbd-5c68-4cf0-8561-6a7808dea0bd" />
 
-Set value: 12345
-Read value: 12345
-Match result: ✓ Equal
-✓ Function call successful
-```
 
 #### A3. Call View Function Through Delegated EOA
 - **Purpose**: Verify that read-only functions can be called after delegation.
@@ -111,10 +82,8 @@ Match result: ✓ Equal
 
 **Test Result:**
 
-```text
-Version info: SimpleLogic v1.0
-✓ View function call successful
-```
+<img width="610" height="247" alt="image" src="https://github.com/user-attachments/assets/c4138684-a3f8-4bc8-a676-f1f0f8f08c03" />
+
 
 ### B. Account Abstraction Features
 
@@ -124,26 +93,8 @@ Version info: SimpleLogic v1.0
 
 **Test Result:**
 
-```text
-【Sponsor (owner) Initial State】
-Address: 0x873C36f9Fd02e0C57a393aFE80D14f244fE04378
-Balance: 9999686.056943375 XDC
+<img width="805" height="436" alt="image" src="https://github.com/user-attachments/assets/542cce5a-964e-42d0-81f2-2ac049317a89" />
 
-【Transaction Details】
-Transaction hash: 0xf647371401411287d68ea56c0cee014a29b886ff5919fd3ceaa27981cc0bdfc5
-Block number: 3144057
-Gas used: 28170
-Effective gas price: 300.0 Gwei
-Total gas cost: 0.008451 XDC
-Transaction status: Success (1)
-
-【Sponsor (owner) Final State】
-Final balance: 9999686.048492375 XDC
-Balance change: 0.008451 XDC
-Verification: ✓ Balance decreased (gas paid)
-Final value in accountC's storage: 8888
-✓ Gas sponsorship test passed
-```
 
 #### B2. Transaction Batching (Multiple Operations in Single Transaction)
 - **Purpose**: Complete multiple state changes in a single transaction.
@@ -151,19 +102,7 @@ Final value in accountC's storage: 8888
 
 **Test Result:**
 
-```text
-Transaction hash: 0x4fc1f19e4550be18e001213e021e53e6d309203e6cb46b62f9e7c484b7638e3e
-Block number: 3144058
-Gas used: 28115
-
-【State Change】
-Value before operation: 8888
-Input initial value: 100
-Value after operation: 110
-Expected value: 110 (initial value + 10)
-Verification: ✓ Value matches
-✓ Batch operation test passed
-```
+<img width="838" height="305" alt="image" src="https://github.com/user-attachments/assets/9f018f12-8615-4a05-beff-30ffc2a4f31d" />
 
 ### C. Boundary and Security Tests
 
@@ -173,15 +112,8 @@ Verification: ✓ Value matches
 
 **Test Result:**
 
-```text
-Current nonce: 2
-Wrong nonce: 1001
-Code before: 0xef01001be54400e2bf72102000801841c203acddef1129
-Transaction status: Success (1)
-Code after: 0xef01001be54400e2bf72102000801841c203acddef1129
-Verification: ✓ Code unchanged
-✓ Invalid nonce test passed
-```
+<img width="912" height="594" alt="image" src="https://github.com/user-attachments/assets/2a554af5-8521-4cd7-bc86-2fe0a1ec7ace" />
+
 
 #### C4. Conditional Revert Behavior
 - **Purpose**: Verify revert behavior when `require` condition fails.
@@ -189,21 +121,8 @@ Verification: ✓ Code unchanged
 
 **Test Result:**
 
-```text
-【Test Case 1: Value < 100, should revert】
-Input value: 50
-Result: ✓ Transaction reverted (as expected)
-Error message: execution reverted: Value must be greater than 100...
+<img width="821" height="323" alt="image" src="https://github.com/user-attachments/assets/74c53ebd-1714-4bd3-a340-bae5592874cd" />
 
-【Test Case 2: Value > 100, should succeed】
-Input value: 150
-Transaction hash: 0xe2736c3b2543c46cd5f94bdfc2b6b4894e7eb682131801679716e7c2d4f6222f
-Block number: 3144061
-Gas used: 44810
-Counter value: 150
-Result: ✓ Transaction successful
-✓ Conditional revert test passed
-```
 
 ### D. Override and Cleanup
 
@@ -213,45 +132,16 @@ Result: ✓ Transaction successful
 
 **Test Result:**
 
-```text
-【Authorization Info】
-Account address: 0x222886c06EC655c0B7a466941286F3FE7D6cD03F
-Current nonce: 3
-Target address: 0x0000000000000000000000000000000000000000 (zero address, used to clear delegation)
-Chain ID: 551
+<img width="778" height="308" alt="image" src="https://github.com/user-attachments/assets/c7919633-8985-42e7-8f11-260c81a8debd" />
 
-【Actual Result】
-Account code: 0x (empty, normal EOA)
-Code length: 2 characters
-Code hash: 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
-Verification: ✓ Account reverted to normal EOA
-✓ Reset authorization test passed
-```
 
 #### D2. Multiple Delegation Overrides (Last Valid Authorization Takes Effect)
 - **Purpose**: Submit multiple authorizations for the same authority, final delegation follows the last valid authorization.
 - **Expected**: Final delegation points to last valid target contract.
 
 **Test Result:**
+<img width="725" height="153" alt="image" src="https://github.com/user-attachments/assets/aeda2837-93a1-4f65-a8b1-add1a4fa814b" />
 
-```text
-【First Delegation: SimpleLogic】
-Transaction hash: 0x995cc629f1f60f4f2636320e0b4ac4d02c780d887997c1edcc374426f82ae755
-Block number: 3144064
-Target contract: 0x1be54400E2bF72102000801841c203ACdDef1129
-Set value: 111
-SimpleLogic.getValue(): 111
-
-【Second Delegation: BatchOperations (Override)】
-Transaction hash: 0x735d0aeabc98daa2946653651a174bedfc2d1a2987ac19f6e5c409a388bc9f0e
-Block number: 3144066
-Target contract: 0xb2727BEF48f7393401D0aF2485e3469757ffA6EA
-Operation type: 1, operation data: 222
-BatchOperations.getOperationCount(): 1
-
-Verification: ✓ Both different delegation calls executed successfully
-✓ Multiple delegation override test passed
-```
 
 ### E. Comprehensive Flow
 
@@ -261,30 +151,8 @@ Verification: ✓ Both different delegation calls executed successfully
 
 **Test Result:**
 
-```text
-【Step 1: Set initial value = 777】
-Transaction hash: 0xe60aa96a11ffab1538a8328a782ce450ec2ca5711c10745b2448c109aec7383a
-Block number: 3144068
-Current value: 777
+<img width="456" height="212" alt="image" src="https://github.com/user-attachments/assets/7d54b941-627e-48e3-90ac-ca0d4eca520b" />
 
-【Step 2: First increment】
-Transaction hash: 0xa3ddfca3ceb307461d000d2a77e097b54a4c9f4fd8b22b4f77cd021f436a8952
-Block number: 3144069
-Current value: 778
-
-【Step 3: Second increment】
-Transaction hash: 0x7d3aba410676571975a2c45d3c41df72cf118ff4edf482c0e9ea2d0974e89081
-Block number: 3144070
-Final value: 779
-
-【Result Verification】
-Initial value: 777
-After first increment: 778
-After second increment: 779
-Expected value: 779
-Verification: ✓ Value matches
-✓ Complete flow test passed
-```
 
 
 ## Conclusion
