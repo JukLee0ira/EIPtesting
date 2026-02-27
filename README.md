@@ -7,20 +7,27 @@ This project is a systematic Ethereum Improvement Proposal (EIP) testing framewo
 
 ## Quick Start
 
-### 1. Environment Setup
+### 1. Clone Repository
+
+```bash
+git clone https://github.com/JukLee0ira/EIPtesting.git
+cd EIPtesting
+```
+
+### 2. Environment Setup
 
 **Prerequisites:**
 - Node.js >= 16.x
 - npm or yarn
 - Ethereum node supporting the respective EIP (private network or testnet)
 
-### 2. Install Dependencies
+### 3. Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 3. Configure Environment Variables
+### 4. Configure Environment Variables
 
 Copy the example configuration file and modify:
 
@@ -38,13 +45,13 @@ RPC_URL=http://127.0.0.1:8545
 PRIVATE_KEYS=key1,key2,key3,key4
 ```
 
-### 4. Compile Contracts
+### 5. Compile Contracts
 
 ```bash
 npx hardhat compile
 ```
 
-### 5. Run Tests
+### 6. Run Tests
 
 Run all tests
 ```bash

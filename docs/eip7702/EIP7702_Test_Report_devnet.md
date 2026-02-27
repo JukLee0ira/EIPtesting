@@ -168,13 +168,4 @@ Results of running the EIP-7702 test suite:
 - [x] Comprehensive flow completed (E1)
 
 
-### Multi-Network Comparison Summary
-
-| Network | Chain ID | Result |
-|---|---|---|
-| `devnet` | `551` | ✅ 10/10 Passed |
-| `myNet` (Private) | `20986` | ✅ 10/10 Passed |
-
-Both networks fully support EIP-7702 with identical test coverage and all tests passing.
-
 
