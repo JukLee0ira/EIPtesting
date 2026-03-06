@@ -63,6 +63,16 @@ function calculateEIP7623FloorCost(nonZeroBytes: number, zeroBytes: number): big
   return BASE_GAS + TOTAL_COST_FLOOR_PER_TOKEN * tokens;
 }
 
+// Helper function: Calculate EIP-7623 full formula (max of STANDARD and FLOOR)
+// EIP-7623: gas = 21000 + max(STANDARD_path, FLOOR_path)
+//   - STANDARD_path = 21000 + 4 * zero_bytes + 68 * non_zero_bytes (original XDC rates)
+//   - FLOOR_path = 21000 + 10 * (zero_bytes + 4 * non_zero_bytes)
+function calculateEIP7623Cost(nonZeroBytes: number, zeroBytes: number): bigint {
+  const standardPath = BASE_GAS + XDC_ZERO_BYTE_COST * BigInt(zeroBytes) + XDC_NONZERO_BYTE_COST * BigInt(nonZeroBytes);
+  const floorPath = calculateEIP7623FloorCost(nonZeroBytes, zeroBytes);
+  return standardPath > floorPath ? standardPath : floorPath;
+}
+
 // Helper function to send transaction and get receipt
 async function sendTxAndGetGas(signer: Signer, tx: {
   to: string;
@@ -141,7 +151,9 @@ describe("EIP-7623 Complete Test Suite", function () {
      *
      * 用例: 零=4, 非零=0
      * XDC: 21000 + 4×4 = 21016
-     * EIP-7623: 21000 + 10×(4 + 0) = 21040
+     * EIP-7623 STANDARD: 21000 + 4×4 = 21016
+     * EIP-7623 FLOOR: 21000 + 10×4 = 21040
+     * MAX(21016, 21040) = 21040
      * 差异: +24 (EIP-7623 更贵)
      *
      * 注意: 在 apothem (无EIP-7623) 上，实际 gas = 21016，断言会失败
@@ -164,34 +176,38 @@ describe("EIP-7623 Complete Test Suite", function () {
 
       const xdcCost = calculateXDCCost(nonZeroBytes, zeroBytes);
       const eip7623Floor = calculateEIP7623FloorCost(nonZeroBytes, zeroBytes);
+      const eip7623Cost = calculateEIP7623Cost(nonZeroBytes, zeroBytes);
 
       console.log("XDC Cost (no EIP-7623):", xdcCost.toString());
       console.log("EIP-7623 Floor:", eip7623Floor.toString());
-      console.log("Difference:", (eip7623Floor - xdcCost).toString());
+      console.log("EIP-7623 (max):", eip7623Cost.toString());
+      console.log("Difference:", (eip7623Cost - xdcCost).toString());
 
-      // T1: 验证实际 gas 等于 EIP-7623 floor (不是 >=)
+      // T1: 验证实际 gas 等于 EIP-7623 max
       // apothem (无EIP-7623): 实际 = 21016 ≠ 21040 → 失败
       // devnet (有EIP-7623): 实际 = 21040 = 21040 → 通过
       expect(
         gasUsed,
-        `T1: Expected exactly ${eip7623Floor} with EIP-7623, got ${gasUsed}`
-      ).to.eq(eip7623Floor);
+        `T1: Expected exactly ${eip7623Cost} with EIP-7623, got ${gasUsed}`
+      ).to.eq(eip7623Cost);
     });
 
     /**
-     * T2. 4 零字节 + 4 非零字节
+     * T2. 8 零字节 + 1 非零字节 (高区分度)
      *
-     * 用例: 零=4, 非零=4
-     * XDC: 21000 + 4×4 + 4×68 = 21288
-     * EIP-7623: 21000 + 10×(4 + 4×4) = 21200
-     * 差异: -88 (XDC 更贵)
+     * 用例: 零=8, 非零=1
+     * XDC: 21000 + 4×8 + 68×1 = 21100
+     * EIP-7623 STANDARD: 21000 + 4×8 + 68×1 = 21100
+     * EIP-7623 FLOOR: 21000 + 10×(8 + 1×4) = 21200
+     * MAX(21100, 21200) = 21200
+     * 差异: +100 (FLOOR 更大，EIP-7623 更贵)
      *
-     * 注意: 在 apothem (无EIP-7623) 上，实际 gas = 21288，断言会失败
+     * 注意: 在 apothem (无EIP-7623) 上，实际 gas = 21100，断言会失败
      *       在 devnet (有EIP-7623) 上，实际 gas = 21200，断言会通过
      */
-    it("T2. 4 Zero + 4 Non-Zero Bytes", async function () {
-      const zeroBytes = 4;
-      const nonZeroBytes = 4;
+    it("T2. 8 Zero + 1 Non-Zero Bytes (High Discriminability)", async function () {
+      const zeroBytes = 8;
+      const nonZeroBytes = 1;
       const calldata = "0x" + "00".repeat(zeroBytes) + "ab".repeat(nonZeroBytes);
       
       const gasUsed = await sendTxAndGetGas(owner, {
@@ -200,41 +216,45 @@ describe("EIP-7623 Complete Test Suite", function () {
         data: calldata,
       });
 
-      console.log("\n--- T2: 4 Zero + 4 Non-Zero Bytes ---");
+      console.log("\n--- T2: 8 Zero + 1 Non-Zero Bytes ---");
       console.log("Zero bytes:", zeroBytes, "| Non-zero bytes:", nonZeroBytes);
       console.log("Actual Gas Used:", gasUsed.toString());
 
       const xdcCost = calculateXDCCost(nonZeroBytes, zeroBytes);
       const eip7623Floor = calculateEIP7623FloorCost(nonZeroBytes, zeroBytes);
+      const eip7623Cost = calculateEIP7623Cost(nonZeroBytes, zeroBytes);
 
       console.log("XDC Cost (no EIP-7623):", xdcCost.toString());
       console.log("EIP-7623 Floor:", eip7623Floor.toString());
-      console.log("Difference:", (xdcCost - eip7623Floor).toString());
+      console.log("EIP-7623 (max):", eip7623Cost.toString());
+      console.log("Difference:", (eip7623Cost - xdcCost).toString());
 
-      // T2: 验证实际 gas 等于 EIP-7623 floor (不是 >=)
-      // apothem (无EIP-7623): 实际 = 21288 ≠ 21200 → 失败
+      // T2: 验证实际 gas 等于 EIP-7623 max
+      // apothem (无EIP-7623): 实际 = 21100 ≠ 21200 → 失败
       // devnet (有EIP-7623): 实际 = 21200 = 21200 → 通过
       expect(
         gasUsed,
-        `T2: Expected exactly ${eip7623Floor} with EIP-7623, got ${gasUsed}`
-      ).to.eq(eip7623Floor);
+        `T2: Expected exactly ${eip7623Cost} with EIP-7623, got ${gasUsed}`
+      ).to.eq(eip7623Cost);
     });
 
     /**
-     * T3. 4 非零字节
+     * T3. 6 零字节 + 1 非零字节 (中区分度)
      *
-     * 用例: 零=0, 非零=4
-     * XDC: 21000 + 4×68 = 21272
-     * EIP-7623: 21000 + 10×(0 + 4×4) = 21160
-     * 差异: -112 (XDC 更贵)
+     * 用例: 零=6, 非零=1
+     * XDC: 21000 + 4×6 + 68×1 = 21092
+     * EIP-7623 STANDARD: 21000 + 4×6 + 68×1 = 21092
+     * EIP-7623 FLOOR: 21000 + 10×(6 + 1×4) = 21100
+     * MAX(21092, 21100) = 21100
+     * 差异: +8 (FLOOR 更大)
      *
-     * 注意: 在 apothem (无EIP-7623) 上，实际 gas = 21272，断言会失败
-     *       在 devnet (有EIP-7623) 上，实际 gas = 21160，断言会通过
+     * 注意: 在 apothem (无EIP-7623) 上，实际 gas = 21092，断言会失败
+     *       在 devnet (有EIP-7623) 上，实际 gas = 21100，断言会通过
      */
-    it("T3. 4 Non-Zero Bytes", async function () {
-      const zeroBytes = 0;
-      const nonZeroBytes = 4;
-      const calldata = "0x" + "ab".repeat(nonZeroBytes);
+    it("T3. 6 Zero + 1 Non-Zero Bytes (Medium Discriminability)", async function () {
+      const zeroBytes = 6;
+      const nonZeroBytes = 1;
+      const calldata = "0x" + "00".repeat(zeroBytes) + "ab".repeat(nonZeroBytes);
       
       const gasUsed = await sendTxAndGetGas(owner, {
         to: ownerAddress,
@@ -242,24 +262,26 @@ describe("EIP-7623 Complete Test Suite", function () {
         data: calldata,
       });
 
-      console.log("\n--- T3: 4 Non-Zero Bytes ---");
+      console.log("\n--- T3: 6 Zero + 1 Non-Zero Bytes ---");
       console.log("Zero bytes:", zeroBytes, "| Non-zero bytes:", nonZeroBytes);
       console.log("Actual Gas Used:", gasUsed.toString());
 
       const xdcCost = calculateXDCCost(nonZeroBytes, zeroBytes);
       const eip7623Floor = calculateEIP7623FloorCost(nonZeroBytes, zeroBytes);
+      const eip7623Cost = calculateEIP7623Cost(nonZeroBytes, zeroBytes);
 
       console.log("XDC Cost (no EIP-7623):", xdcCost.toString());
       console.log("EIP-7623 Floor:", eip7623Floor.toString());
-      console.log("Difference:", (xdcCost - eip7623Floor).toString());
+      console.log("EIP-7623 (max):", eip7623Cost.toString());
+      console.log("Difference:", (eip7623Cost - xdcCost).toString());
 
-      // T3: 验证实际 gas 等于 EIP-7623 floor (不是 >=)
-      // apothem (无EIP-7623): 实际 = 21272 ≠ 21160 → 失败
-      // devnet (有EIP-7623): 实际 = 21160 = 21160 → 通过
+      // T3: 验证实际 gas 等于 EIP-7623 max
+      // apothem (无EIP-7623): 实际 = 21092 ≠ 21100 → 失败
+      // devnet (有EIP-7623): 实际 = 21100 = 21100 → 通过
       expect(
         gasUsed,
-        `T3: Expected exactly ${eip7623Floor} with EIP-7623, got ${gasUsed}`
-      ).to.eq(eip7623Floor);
+        `T3: Expected exactly ${eip7623Cost} with EIP-7623, got ${gasUsed}`
+      ).to.eq(eip7623Cost);
     });
 
     /**
@@ -303,12 +325,13 @@ describe("EIP-7623 Complete Test Suite", function () {
   after(function () {
     console.log("\n=== EIP-7623 Test Suite Completed ===");
     console.log("\n=== Test Case Summary ===");
-    console.log("| 用例 | 零 | 非零 | XDC (4/68) | EIP-7623 (10/40) | 差异 |");
-    console.log("|------|---|------|------------|------------------|------|");
-    console.log("| T1   | 4 | 0    | 21016      | 21040            | +24  |");
-    console.log("| T2   | 4 | 4    | 21288      | 21200            | -88  |");
-    console.log("| T3   | 0 | 4    | 21272      | 21160            | -112 |");
-    console.log("| T4   | 0 | 0    | 21000      | 21000            | 0    |");
-    console.log("\n注: T1, T2, T3 有差异可区分 EIP-7623 是否实现; T4 预期无差异");
+    console.log("| 用例 | 零 | 非零 | XDC | STANDARD | FLOOR | MAX | 差异 |");
+    console.log("|------|---|------|-----|----------|-------|-----|------|");
+    console.log("| T1   | 4 | 0    | 21016 | 21016  | 21040 | 21040 | +24  |");
+    console.log("| T2   | 8 | 1    | 21100 | 21100  | 21200 | 21200 | +100 |");
+    console.log("| T3   | 6 | 1    | 21092 | 21092  | 21100 | 21100 | +8   |");
+    console.log("| T4   | 0 | 0    | 21000 | 21000  | 21000 | 21000 | 0    |");
+    console.log("\n注: T1, T2, T3 取 MAX(FLOOR) 都有差异，可区分 EIP-7623 是否实现");
+    console.log("    T2 差异最大(+100)，T3 差异最小(+8)，T4 无差异(基准)");
   });
 });

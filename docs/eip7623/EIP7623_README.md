@@ -112,47 +112,49 @@ npx hardhat test test/eip7623.test.ts --grep "T1. 4 Zero Bytes" --network myNet
 
 ---
 
-### T2. 4 零字节 + 4 非零字节 (4 Zero + 4 Non-Zero Bytes)
+### T2. 8 零字节 + 1 非零字节 (高区分度)
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7623.test.ts --grep "T2. 4 Zero + 4 Non-Zero Bytes" --network myNet
+npx hardhat test test/eip7623.test.ts --grep "T2. 8 Zero" --network myNet
 ```
 
 **Test Purpose:**
-- 验证 EIP-7623 对混合 calldata 的 floor 费用计算
+- 验证 EIP-7623 对高零字节比例的 floor 费用计算
+- **高区分度**：FLOOR > STANDARD，差异最大
 
 **Test Steps:**
-1. 发送 4 字节零值 + 4 字节非零值 calldata
+1. 发送 8 字节零值 + 1 字节非零值 calldata
 2. 获取实际 gas 消耗
 3. 验证符合 EIP-7623 floor 费用
 
 **Expected Output:**
-- XDC (no EIP-7623): 21288 gas (21000 + 4×4 + 4×68)
-- EIP-7623 enabled: >= 21200 gas (21000 + 10×(4 + 4×4))
-- **差异: -88** (XDC 更贵)
+- XDC (no EIP-7623): 21100 gas (21000 + 4×8 + 1×68)
+- EIP-7623 enabled: 21200 gas (21000 + 10×(8 + 1×4))
+- **差异: +100** (EIP-7623 更贵，FLOOR > STANDARD)
 
 ---
 
-### T3. 4 非零字节 (4 Non-Zero Bytes)
+### T3. 6 零字节 + 1 非零字节 (中区分度)
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7623.test.ts --grep "T3. 4 Non-Zero Bytes" --network myNet
+npx hardhat test test/eip7623.test.ts --grep "T3. 6 Zero" --network myNet
 ```
 
 **Test Purpose:**
-- 验证 EIP-7623 对纯非零字节的 floor 费用计算
+- 验证 EIP-7623 对中高零字节比例的 floor 费用计算
+- **中区分度**：FLOOR > STANDARD，但差异较小
 
 **Test Steps:**
-1. 发送 4 字节非零值 calldata (0xabababab)
+1. 发送 6 字节零值 + 1 字节非零值 calldata
 2. 获取实际 gas 消耗
 3. 验证符合 EIP-7623 floor 费用
 
 **Expected Output:**
-- XDC (no EIP-7623): 21272 gas (21000 + 4×68)
-- EIP-7623 enabled: >= 21160 gas (21000 + 10×(0 + 4×4))
-- **差异: -112** (XDC 更贵)
+- XDC (no EIP-7623): 21092 gas (21000 + 4×6 + 1×68)
+- EIP-7623 enabled: 21100 gas (21000 + 10×(6 + 1×4))
+- **差异: +8** (EIP-7623 更贵，FLOOR > STANDARD)
 
 ---
 
@@ -187,8 +189,8 @@ npx hardhat test test/eip7623.test.ts --network myNet
 
 # Run specific test
 npx hardhat test test/eip7623.test.ts --grep "T1. 4 Zero Bytes" --network myNet
-npx hardhat test test/eip7623.test.ts --grep "T2. 4 Zero + 4 Non-Zero" --network myNet
-npx hardhat test test/eip7623.test.ts --grep "T3. 4 Non-Zero" --network myNet
+npx hardhat test test/eip7623.test.ts --grep "T2. 8 Zero" --network myNet
+npx hardhat test test/eip7623.test.ts --grep "T3. 6 Zero" --network myNet
 npx hardhat test test/eip7623.test.ts --grep "T4. Empty Calldata" --network myNet
 
 # Check gas used in detail
@@ -205,8 +207,8 @@ npx hardhat test test/eip7623.test.ts --network myNet 2>&1 | grep -E "passing|fa
 | Test Case | Zero Bytes | Non-Zero Bytes | XDC (4/68) | EIP-7623 (10/40) | Difference |
 |-----------|------------|----------------|------------|------------------|------------|
 | T1 | 4 | 0 | 21016 | 21040 | +24 |
-| T2 | 4 | 4 | 21288 | 21200 | -88 |
-| T3 | 0 | 4 | 21272 | 21160 | -112 |
+| T2 | 8 | 1 | 21100 | 21200 | +100 |
+| T3 | 6 | 1 | 21092 | 21100 | +8 |
 | T4 | 0 | 0 | 21000 | 21000 | 0 (expected) |
 
 ---
@@ -216,11 +218,11 @@ npx hardhat test test/eip7623.test.ts --network myNet 2>&1 | grep -E "passing|fa
 | Test | Non-zero | Zero | Tokens Calc | XDC (no EIP-7623) | EIP-7623 (floor) | Difference |
 |------|----------|------|-------------|-------------------|------------------|------------|
 | T1 | 0 | 4 | 4×1=4 | 21000+4×4=**21016** | 21000+10×4=**21040** | +24 |
-| T2 | 4 | 4 | 4+4×4=20 | 21000+4×4+4×68=**21288** | 21000+10×20=**21200** | -88 |
-| T3 | 4 | 0 | 4×4=16 | 21000+4×68=**21272** | 21000+10×16=**21160** | -112 |
+| T2 | 1 | 8 | 8+1×4=12 | 21000+4×8+1×68=**21100** | 21000+10×12=**21200** | +100 |
+| T3 | 1 | 6 | 6+1×4=10 | 21000+4×6+1×68=**21092** | 21000+10×10=**21100** | +8 |
 | T4 | 0 | 0 | 0 | 21000 | 21000 | 0 (expected) |
 
-**注**: T1, T2, T3 有差异可用于区分 EIP-7623 是否实现; T4 预期无差异
+**注**: T1, T2, T3 取 MAX(FLOOR) 都有差异可用于区分 EIP-7623 是否实现; T4 预期无差异
 
 ---
 
@@ -245,8 +247,8 @@ npx hardhat test test/eip7623.test.ts --network myNet 2>&1 | grep -E "passing|fa
 | Test Case | 零 | 非零 | XDC (4/68) | EIP-7623 (10/40) | 差异 | 可区分 |
 |-----------|---|------|------------|------------------|------|--------|
 | T1 | 4 | 0 | 21016 | 21040 | +24 | ✅ |
-| T2 | 4 | 4 | 21288 | 21200 | -88 | ✅ |
-| T3 | 0 | 4 | 21272 | 21160 | -112 | ✅ |
+| T2 | 8 | 1 | 21100 | 21200 | +100 | ✅ (最大) |
+| T3 | 6 | 1 | 21092 | 21100 | +8 | ✅ (最小) |
 | T4 | 0 | 0 | 21000 | 21000 | 0 | ❌ (预期) |
 
-**结论**: T1, T2, T3 有差异，可用于验证 EIP-7623 是否在链上正确实现。
+**结论**: T1, T2, T3 取 MAX(FLOOR) 都有差异，可用于验证 EIP-7623 是否在链上正确实现。T2 差异最大(+100)，T3 差异最小(+8)。
