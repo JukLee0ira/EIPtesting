@@ -73,6 +73,16 @@ function calculateEIP7623Cost(nonZeroBytes: number, zeroBytes: number): bigint {
   return standardPath > floorPath ? standardPath : floorPath;
 }
 
+/** Calculate STANDARD path cost */
+function calculateStandardPath(zeroBytes: number, nonZeroBytes: number): bigint {
+  return BASE_GAS + XDC_ZERO_BYTE_COST * BigInt(zeroBytes) + XDC_NONZERO_BYTE_COST * BigInt(nonZeroBytes);
+}
+
+/** Calculate FLOOR path cost */
+function calculateFloorPath(zeroBytes: number, nonZeroBytes: number): bigint {
+  return calculateEIP7623FloorCost(nonZeroBytes, zeroBytes);
+}
+
 // Helper function to send transaction and get receipt
 async function sendTxAndGetGas(signer: Signer, tx: {
   to: string;
