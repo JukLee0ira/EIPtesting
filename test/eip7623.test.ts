@@ -321,6 +321,161 @@ describe("EIP-7623 Complete Test Suite", function () {
   });
 
   // ============================================================
+  // T5. FLOOR = STANDARD Critical Point (5 Zero + 1 Non-Zero)
+  // ============================================================
+  describe("T5. Critical Point: 5 Zero + 1 Non-Zero (FLOOR ≈ STANDARD)", function () {
+    /**
+     * T5. FLOOR = STANDARD 临界点
+     *
+     * 用例: 零=5, 非零=1
+     * XDC: 21000 + 4×5 + 68×1 = 21088
+     * EIP-7623 STANDARD: 21000 + 4×5 + 68×1 = 21088
+     * EIP-7623 FLOOR: 21000 + 10×(5 + 1×4) = 21090
+     * MAX(21088, 21090) = 21090
+     * 差异: +2 (FLOOR 略大，仅差 2 gas)
+     */
+    it("T5. Should correctly handle FLOOR ≈ STANDARD boundary", async function () {
+      const zeroBytes = 5;
+      const nonZeroBytes = 1;
+      const calldata = "0x" + "00".repeat(zeroBytes) + "ab".repeat(nonZeroBytes);
+
+      const gasUsed = await sendTxAndGetGas(owner, {
+        to: ownerAddress,
+        value: 0n,
+        data: calldata,
+      });
+
+      const standardPath = calculateStandardPath(zeroBytes, nonZeroBytes);
+      const floorPath = calculateFloorPath(zeroBytes, nonZeroBytes);
+      const eip7623Cost = calculateEIP7623Cost(nonZeroBytes, zeroBytes);
+
+      console.log(`\n--- T5: ${zeroBytes} Zero + ${nonZeroBytes} Non-Zero (Critical Point) ---`);
+      console.log(`Calldata: ${calldata}`);
+      console.log(`STANDARD: ${standardPath} | FLOOR: ${floorPath} | EIP-7623: ${eip7623Cost}`);
+      console.log(`Actual: ${gasUsed}`);
+      console.log(`>>> Path: ${floorPath > standardPath ? "FLOOR (higher)" : "STANDARD (higher)"}`);
+      console.log(`>>> Difference: ${floorPath > standardPath ? floorPath - standardPath : standardPath - floorPath} gas`);
+
+      expect(floorPath).to.be.gt(standardPath, "FLOOR should be > STANDARD at this boundary");
+      expect(gasUsed).to.eq(eip7623Cost);
+      verifyGasWithTolerance(gasUsed, eip7623Cost);
+    });
+  });
+
+  // ============================================================
+  // T6. Pure Non-Zero Bytes - Multiple Values (STANDARD Path)
+  // ============================================================
+  describe("T6. Pure Non-Zero Bytes: 1/2/5 Non-Zero", function () {
+    /**
+     * T6. 纯非零字节 - 验证 STANDARD > FLOOR
+     */
+    it("T6. Should use STANDARD path (STANDARD > FLOOR)", async function () {
+      const testCases = [
+        { zero: 0, nonZero: 1, desc: "1 Non-Zero" },
+        { zero: 0, nonZero: 2, desc: "2 Non-Zero" },
+        { zero: 0, nonZero: 5, desc: "5 Non-Zero" },
+      ];
+
+      for (const tc of testCases) {
+        const calldata = "0x" + "ab".repeat(tc.nonZero);
+        const gasUsed = await sendTxAndGetGas(owner, {
+          to: ownerAddress,
+          value: 0n,
+          data: calldata,
+        });
+
+        const standardPath = calculateStandardPath(tc.zero, tc.nonZero);
+        const floorPath = calculateFloorPath(tc.zero, tc.nonZero);
+        const eip7623Cost = calculateEIP7623Cost(tc.nonZero, tc.zero);
+
+        console.log(`\n--- T6: ${tc.desc} ---`);
+        console.log(`Calldata: ${calldata}`);
+        console.log(`STANDARD: ${standardPath} | FLOOR: ${floorPath} | EIP-7623: ${eip7623Cost}`);
+        console.log(`Actual: ${gasUsed}`);
+        console.log(`>>> Path: ${standardPath > floorPath ? "STANDARD" : "FLOOR"}`);
+
+        expect(standardPath).to.be.gt(floorPath, `STANDARD should be > FLOOR for ${tc.desc}`);
+        expect(gasUsed).to.eq(eip7623Cost);
+        verifyGasWithTolerance(gasUsed, eip7623Cost);
+      }
+    });
+  });
+
+  // ============================================================
+  // T7. Large Calldata Test (10KB)
+  // ============================================================
+  describe("T7. Large Calldata: 10KB", function () {
+    /**
+     * T7. 极端大数据 - 测试超大 calldata (10KB)
+     */
+    it("T7. Should handle large calldata correctly", async function () {
+      const largeSize = 10240; // 10KB
+      const zeroBytes = Math.floor(largeSize / 2);
+      const nonZeroBytes = largeSize - zeroBytes;
+      const calldata = "0x" + "00".repeat(zeroBytes) + "ab".repeat(nonZeroBytes);
+
+      console.log(`\n--- T7: Large Calldata (${largeSize} bytes) ---`);
+      console.log(`Zero: ${zeroBytes}, Non-Zero: ${nonZeroBytes}`);
+
+      const gasUsed = await sendTxAndGetGas(owner, {
+        to: ownerAddress,
+        value: 0n,
+        data: calldata,
+        gasLimit: 2000000n, // Increase gas limit for large calldata
+      });
+
+      const xdcCost = calculateXDCCost(nonZeroBytes, zeroBytes);
+      const standardPath = calculateStandardPath(zeroBytes, nonZeroBytes);
+      const floorPath = calculateFloorPath(zeroBytes, nonZeroBytes);
+      const eip7623Cost = calculateEIP7623Cost(nonZeroBytes, zeroBytes);
+
+      console.log(`XDC: ${xdcCost}`);
+      console.log(`STANDARD: ${standardPath} | FLOOR: ${floorPath} | EIP-7623: ${eip7623Cost}`);
+      console.log(`Actual: ${gasUsed}`);
+      console.log(`>>> Path: ${standardPath > floorPath ? "STANDARD" : "FLOOR"}`);
+
+      expect(gasUsed).to.eq(eip7623Cost);
+      verifyGasWithTolerance(gasUsed, eip7623Cost);
+    });
+  });
+
+  // ============================================================
+  // T8. Zero Byte Boundary Tests (1-10 bytes)
+  // ============================================================
+  describe("T8. Zero Byte Boundary: 1-10 Zero Bytes", function () {
+    /**
+     * T8. 边界测试 - 1-10 零字节递增
+     */
+    it("T8. Should handle incremental zero bytes correctly", async function () {
+      const testCases = [
+        { zero: 1, nonZero: 0, desc: "1 Zero" },
+        { zero: 2, nonZero: 0, desc: "2 Zero" },
+        { zero: 5, nonZero: 0, desc: "5 Zero" },
+        { zero: 10, nonZero: 0, desc: "10 Zero" },
+      ];
+
+      for (const tc of testCases) {
+        const calldata = "0x" + "00".repeat(tc.zero);
+        const gasUsed = await sendTxAndGetGas(owner, {
+          to: ownerAddress,
+          value: 0n,
+          data: calldata,
+        });
+
+        const xdcCost = calculateXDCCost(tc.nonZero, tc.zero);
+        const eip7623Cost = calculateEIP7623Cost(tc.nonZero, tc.zero);
+
+        console.log(`\n--- T8: ${tc.desc} ---`);
+        console.log(`XDC: ${xdcCost} | EIP-7623: ${eip7623Cost} | Actual: ${gasUsed}`);
+        console.log(`>>> Difference: ${eip7623Cost - xdcCost} gas`);
+
+        expect(gasUsed).to.eq(eip7623Cost);
+        verifyGasWithTolerance(gasUsed, eip7623Cost);
+      }
+    });
+  });
+
+  // ============================================================
   // SUMMARY
   // ============================================================
   after(function () {
