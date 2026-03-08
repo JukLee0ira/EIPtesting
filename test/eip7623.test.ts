@@ -481,13 +481,17 @@ describe("EIP-7623 Complete Test Suite", function () {
   after(function () {
     console.log("\n=== EIP-7623 Test Suite Completed ===");
     console.log("\n=== Test Case Summary ===");
-    console.log("| 用例 | 零 | 非零 | XDC | STANDARD | FLOOR | MAX | 差异 |");
-    console.log("|------|---|------|-----|----------|-------|-----|------|");
-    console.log("| T1   | 4 | 0    | 21016 | 21016  | 21040 | 21040 | +24  |");
-    console.log("| T2   | 8 | 1    | 21100 | 21100  | 21200 | 21200 | +100 |");
-    console.log("| T3   | 6 | 1    | 21092 | 21092  | 21100 | 21100 | +8   |");
-    console.log("| T4   | 0 | 0    | 21000 | 21000  | 21000 | 21000 | 0    |");
-    console.log("\n注: T1, T2, T3 取 MAX(FLOOR) 都有差异，可区分 EIP-7623 是否实现");
-    console.log("    T2 差异最大(+100)，T3 差异最小(+8)，T4 无差异(基准)");
+    console.log("| Case | Zero | NonZero | XDC    | STANDARD | FLOOR  | EIP-7623 | Diff | Path   |");
+    console.log("|------|------|---------|--------|----------|---------|----------|------|--------|");
+    console.log("| T1   | 4    | 0       | 21016  | 21016    | 21040   | 21040    | +24  | FLOOR  |");
+    console.log("| T2   | 8    | 1       | 21100  | 21100    | 21200   | 21200    | +100 | FLOOR  |");
+    console.log("| T3   | 0    | 0       | 21000  | 21000    | 21000   | 21000    | 0    | N/A    |");
+    console.log("| T4   | 0    | 3       | 21204  | 21204    | 21120   | 21204    | +84  | STD    |");
+    console.log("| T5   | 5    | 1       | 21088  | 21088    | 21090   | 21090    | +2   | FLOOR* |");
+    console.log("| T6   | 0    | 1-5     | varies | varies   | varies  | varies   | varies| STD    |");
+    console.log("| T7   | 5120 | 5120    | huge   | huge     | huge    | huge     | huge | varies |");
+    console.log("| T8   | 1-10 | 0       | varies | varies   | varies  | varies   | varies| FLOOR  |");
+    console.log("\nKey: T1,T2,T5,T8 show FLOOR > STANDARD; T4,T6 show STANDARD > FLOOR; T3 baseline");
+    console.log("* T5 is critical point where FLOOR ≈ STANDARD (diff only 2 gas)");
   });
 });
