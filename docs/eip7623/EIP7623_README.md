@@ -2,7 +2,7 @@
 
 ## Test Overview
 
-This test suite tests EIP-7623 core functions. The proposal aims to increase calldata cost to reduce max block size. Total: **8 test cases (T1-T8)**.
+This test suite tests EIP-7623 core functions. The proposal aims to increase calldata cost to reduce max block size. Total: **5 test cases (T1-T5)**.
 
 **Test Method**: Send real ETH transfer transactions with different calldata sizes. Verify gas usage patterns.
 
@@ -88,22 +88,18 @@ npx hardhat test test/eip7623.test.ts --verbose
 
 ---
 
-## Test Cases: T1-T8
+## Test Cases: T1-T5
 
 ### T1. 4 Zero Bytes (FLOOR > STANDARD)
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7623.test.ts --grep "T1. 4 Zero" --network myNet
+npx hardhat test test/eip7623.test.ts --grep "T1. 4 Zero" --network devnet
 ```
 
 **Test Purpose:**
 - 验证 EIP-7623 对纯零字节的 floor 费用计算
-
-**Test Steps:**
-1. 发送 4 字节零值 calldata (0x00000000)
-2. 获取实际 gas 消耗
-3. 验证符合 EIP-7623 floor 费用
+- **区分度**: +24 gas
 
 **Expected Output:**
 | Metric | Value |
@@ -122,7 +118,7 @@ npx hardhat test test/eip7623.test.ts --grep "T1. 4 Zero" --network myNet
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7623.test.ts --grep "T2. 8 Zero" --network myNet
+npx hardhat test test/eip7623.test.ts --grep "T2. 8 Zero" --network devnet
 ```
 
 **Test Purpose:**
@@ -142,59 +138,11 @@ npx hardhat test test/eip7623.test.ts --grep "T2. 8 Zero" --network myNet
 
 ---
 
-### T3. Empty Calldata (Baseline - No Difference)
+### T3. Critical Point: 5 Zero + 1 Non-Zero (FLOOR ≈ STANDARD)
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7623.test.ts --grep "T3. Empty" --network myNet
-```
-
-**Test Purpose:**
-- 验证空 calldata 不受 EIP-7623 影响 (基准测试)
-- **此用例预期无差异**，用于确认公式正确实现
-
-**Expected Output:**
-| Metric | Value |
-|--------|-------|
-| Zero Bytes | 0 |
-| Non-Zero Bytes | 0 |
-| Tokens | 0 |
-| STANDARD | 21000 |
-| FLOOR | 21000 |
-| **EIP-7623 (max)** | **21000** |
-| **Difference** | **0** (预期无差异) |
-
----
-
-### T4. 3 Non-Zero Bytes (STANDARD > FLOOR)
-
-**Test Command:**
-```bash
-npx hardhat test test/eip7623.test.ts --grep "T4. 3 Non" --network myNet
-```
-
-**Test Purpose:**
-- 验证非零字节多时走 STANDARD 路径 (而非 FLOOR)
-- **STANDARD > FLOOR** 场景
-
-**Expected Output:**
-| Metric | Value |
-|--------|-------|
-| Zero Bytes | 0 |
-| Non-Zero Bytes | 3 |
-| Tokens | 12 |
-| STANDARD | 21204 |
-| FLOOR | 21120 |
-| **EIP-7623 (max)** | **21204** |
-| **Difference** | **+84** (STANDARD > FLOOR) |
-
----
-
-### T5. Critical Point: 5 Zero + 1 Non-Zero (FLOOR ≈ STANDARD)
-
-**Test Command:**
-```bash
-npx hardhat test test/eip7623.test.ts --grep "T5. Critical" --network myNet
+npx hardhat test test/eip7623.test.ts --grep "T3. Critical" --network devnet
 ```
 
 **Test Purpose:**
@@ -214,31 +162,11 @@ npx hardhat test test/eip7623.test.ts --grep "T5. Critical" --network myNet
 
 ---
 
-### T6. Pure Non-Zero Bytes: 1/2/5 Non-Zero (STANDARD Path)
+### T4. Large Calldata: 10KB
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7623.test.ts --grep "T6. Pure Non" --network myNet
-```
-
-**Test Purpose:**
-- 验证纯非零字节始终走 STANDARD 路径
-- 测试多个非零字节值
-
-**Test Cases:**
-| Non-Zero | Tokens | STANDARD | FLOOR | EIP-7623 | Path |
-|----------|--------|----------|-------|----------|------|
-| 1 | 4 | 21068 | 21040 | 21068 | STANDARD |
-| 2 | 8 | 21136 | 21080 | 21136 | STANDARD |
-| 5 | 20 | 21340 | 21200 | 21340 | STANDARD |
-
----
-
-### T7. Large Calldata: 10KB
-
-**Test Command:**
-```bash
-npx hardhat test test/eip7623.test.ts --grep "T7. Large" --network myNet
+npx hardhat test test/eip7623.test.ts --grep "T4. Large" --network devnet
 ```
 
 **Test Purpose:**
@@ -255,11 +183,11 @@ npx hardhat test test/eip7623.test.ts --grep "T7. Large" --network myNet
 
 ---
 
-### T8. Zero Byte Boundary: 1-10 Zero Bytes
+### T5. Zero Byte Boundary: 1-10 Zero Bytes
 
 **Test Command:**
 ```bash
-npx hardhat test test/eip7623.test.ts --grep "T8. Boundary" --network myNet
+npx hardhat test test/eip7623.test.ts --grep "T5. Boundary" --network devnet
 ```
 
 **Test Purpose:**
@@ -280,23 +208,20 @@ npx hardhat test test/eip7623.test.ts --grep "T8. Boundary" --network myNet
 
 ```bash
 # Run all EIP-7623 tests
-npx hardhat test test/eip7623.test.ts --network myNet
+npx hardhat test test/eip7623.test.ts --network devnet
 
 # Run specific test
-npx hardhat test test/eip7623.test.ts --grep "T1" --network myNet
-npx hardhat test test/eip7623.test.ts --grep "T2" --network myNet
-npx hardhat test test/eip7623.test.ts --grep "T3" --network myNet
-npx hardhat test test/eip7623.test.ts --grep "T4" --network myNet
-npx hardhat test test/eip7623.test.ts --grep "T5" --network myNet
-npx hardhat test test/eip7623.test.ts --grep "T6" --network myNet
-npx hardhat test test/eip7623.test.ts --grep "T7" --network myNet
-npx hardhat test test/eip7623.test.ts --grep "T8" --network myNet
+npx hardhat test test/eip7623.test.ts --grep "T1" --network devnet
+npx hardhat test test/eip7623.test.ts --grep "T2" --network devnet
+npx hardhat test test/eip7623.test.ts --grep "T3" --network devnet
+npx hardhat test test/eip7623.test.ts --grep "T4" --network devnet
+npx hardhat test test/eip7623.test.ts --grep "T5" --network devnet
 
 # Check gas used in detail
-npx hardhat test test/eip7623.test.ts --grep "T1" --network myNet --verbose
+npx hardhat test test/eip7623.test.ts --grep "T1" --network devnet --verbose
 
 # Quick check: just show pass/fail
-npx hardhat test test/eip7623.test.ts --network myNet 2>&1 | grep -E "passing|failing"
+npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|failing"
 ```
 
 ---
@@ -307,14 +232,11 @@ npx hardhat test test/eip7623.test.ts --network myNet 2>&1 | grep -E "passing|fa
 |-----------|------|----------|--------|------------|----------|-------|----------|------|------|
 | T1 | 4 | 0 | 4 | 21016 | 21016 | 21040 | 21040 | +24 | FLOOR |
 | T2 | 8 | 1 | 12 | 21100 | 21100 | 21200 | 21200 | +100 | FLOOR |
-| T3 | 0 | 0 | 0 | 21000 | 21000 | 21000 | 21000 | 0 | N/A |
-| T4 | 0 | 3 | 12 | 21204 | 21204 | 21120 | 21204 | +84 | STANDARD |
-| T5 | 5 | 1 | 9 | 21088 | 21088 | 21090 | 21090 | +2 | FLOOR* |
-| T6 | 0 | 1-5 | 4-20 | varies | varies | varies | varies | varies | STANDARD |
-| T7 | 5120 | 5120 | 25600 | huge | huge | huge | huge | huge | varies |
-| T8 | 1-10 | 0 | 1-10 | varies | varies | varies | varies | varies | FLOOR |
+| T3 | 5 | 1 | 9 | 21088 | 21088 | 21090 | 21090 | +2 | FLOOR* |
+| T4 | 5120 | 5120 | 25600 | huge | huge | huge | huge | huge | varies |
+| T5 | 1-10 | 0 | 1-10 | varies | varies | varies | varies | varies | FLOOR |
 
-**Note**: T5 is the critical point where FLOOR ≈ STANDARD (diff only 2 gas)
+**Note**: T3 is the critical point where FLOOR ≈ STANDARD (diff only 2 gas)
 
 ---
 
@@ -324,17 +246,11 @@ npx hardhat test test/eip7623.test.ts --network myNet 2>&1 | grep -E "passing|fa
 |------|----------|------|--------|--------------|----------|-------|----------|------|------|
 | T1 | 0 | 4 | 4 | 21016 | 21016 | 21040 | 21040 | +24 | FLOOR |
 | T2 | 1 | 8 | 12 | 21100 | 21100 | 21200 | 21200 | +100 | FLOOR |
-| T3 | 0 | 0 | 0 | 21000 | 21000 | 21000 | 21000 | 0 | N/A |
-| T4 | 3 | 0 | 12 | 21204 | 21204 | 21120 | 21204 | +84 | STANDARD |
-| T5 | 1 | 5 | 9 | 21088 | 21088 | 21090 | 21090 | +2 | FLOOR* |
-| T6 | 1-5 | 0 | 4-20 | varies | > FLOOR | lower | STANDARD | varies | STANDARD |
-| T7 | 5120 | 5120 | 25600 | huge | huge | huge | huge | huge | varies |
-| T8 | 0 | 1-10 | 1-10 | varies | lower | FLOOR | FLOOR | varies | FLOOR |
+| T3 | 1 | 5 | 9 | 21088 | 21088 | 21090 | 21090 | +2 | FLOOR* |
+| T4 | 5120 | 5120 | 25600 | huge | huge | huge | huge | huge | varies |
+| T5 | 0 | 1-10 | 1-10 | varies | lower | FLOOR | FLOOR | varies | FLOOR |
 
-**Key**:
-- FLOOR > STANDARD: T1, T2, T5, T8
-- STANDARD > FLOOR: T4, T6
-- No difference: T3 (baseline)
+**Key**: All tests show FLOOR >= STANDARD (distinguishable on both XDC and EIP-7623 networks)
 
 ---
 
@@ -342,8 +258,8 @@ npx hardhat test test/eip7623.test.ts --network myNet 2>&1 | grep -E "passing|fa
 
 | Network | Result | Description |
 |---------|--------|-------------|
-| **devnet (EIP-7623 enabled)** | 8/8 passed | EIP-7623 implemented correctly ✅ |
-| **apothem (XDC - no EIP-7623)** | 8/8 passed | Tests verify against expected EIP-7623 values |
+| **devnet (EIP-7623 enabled)** | 5/5 passed | EIP-7623 implemented correctly ✅ |
+| **apothem (XDC - no EIP-7623)** | 5/5 failed | Tests expect EIP-7623 values, XDC uses different formula |
 
 ---
 
@@ -360,15 +276,11 @@ npx hardhat test test/eip7623.test.ts --network myNet 2>&1 | grep -E "passing|fa
 |-----------|------|----------|------------|----------|------|-----------------|
 | T1 | 4 | 0 | 21016 | 21040 | +24 | ✅ |
 | T2 | 8 | 1 | 21100 | 21200 | +100 | ✅ (最大) |
-| T3 | 0 | 0 | 21000 | 21000 | 0 | ❌ (预期) |
-| T4 | 0 | 3 | 21204 | 21204 | +84 | ✅ (STANDARD) |
-| T5 | 5 | 1 | 21088 | 21090 | +2 | ✅ (最小) |
-| T6 | 0 | 1-5 | varies | varies | varies | ✅ (STANDARD) |
-| T7 | 5120 | 5120 | huge | huge | huge | ✅ (大) |
-| T8 | 1-10 | 0 | varies | varies | varies | ✅ |
+| T3 | 5 | 1 | 21088 | 21090 | +2 | ✅ (最小) |
+| T4 | 5120 | 5120 | huge | huge | huge | ✅ (大) |
+| T5 | 1-10 | 0 | varies | varies | varies | ✅ |
 
-**结论**: T1, T2, T4, T5, T6, T7, T8 都有差异，可用于验证 EIP-7623 是否在链上正确实现。
+**结论**: 所有测试用例 (T1-T5) 都有差异，可用于验证 EIP-7623 是否在链上正确实现。
 
 - T2 差异最大 (+100)
-- T5 差异最小 (+2)
-- T3 预期无差异 (基准)
+- T3 差异最小 (+2)
