@@ -110,6 +110,12 @@ async function sendTxAndGetGas(signer: Signer, tx: {
   return receipt!.gasUsed;
 }
 
+/** Verify gas used with tolerance for chain variations */
+function verifyGasWithTolerance(actual: bigint, expected: bigint, tolerance: bigint = 100n): void {
+  const diff = actual > expected ? actual - expected : expected - actual;
+  expect(diff).to.lte(tolerance, `Gas difference ${diff} exceeds tolerance ${tolerance}`);
+}
+
 describe("EIP-7623 Complete Test Suite", function () {
   let owner: Signer;
   let ownerAddress: string;
