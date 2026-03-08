@@ -41,7 +41,7 @@ import { ethers } from "hardhat";
 import type { Signer } from "ethers";
 
 // ============================================================
-// Legacy NETWORK CONSTANTS (no EIP-7623)
+// Legacy NETWORK CONSTANTS 
 // ============================================================
 const LEGACY_NONZERO_BYTE_COST = 68n;  // Legacy: non-zero byte = 68 gas
 const LEGACY_ZERO_BYTE_COST = 4n;      // Legacy: zero byte = 4 gas
@@ -194,7 +194,7 @@ describe("EIP-7623 Complete Test Suite", function () {
       const eip7623Floor = calculateEIP7623FloorCost(nonZeroBytes, zeroBytes);
       const eip7623Cost = calculateEIP7623Cost(nonZeroBytes, zeroBytes);
 
-      console.log("noEIP-7623 Cost (no EIP-7623):", xdcCost.toString());
+      console.log("noEIP-7623 Cost :", xdcCost.toString());
       console.log("EIP-7623 Floor:", eip7623Floor.toString());
       console.log("EIP-7623 (max):", eip7623Cost.toString());
       console.log("Difference:", (eip7623Cost - xdcCost).toString());
@@ -240,7 +240,7 @@ describe("EIP-7623 Complete Test Suite", function () {
       const eip7623Floor = calculateEIP7623FloorCost(nonZeroBytes, zeroBytes);
       const eip7623Cost = calculateEIP7623Cost(nonZeroBytes, zeroBytes);
 
-      console.log("noEIP-7623 Cost (no EIP-7623):", xdcCost.toString());
+      console.log("noEIP-7623 Cost :", xdcCost.toString());
       console.log("EIP-7623 Floor:", eip7623Floor.toString());
       console.log("EIP-7623 (max):", eip7623Cost.toString());
       console.log("Difference:", (eip7623Cost - xdcCost).toString());
