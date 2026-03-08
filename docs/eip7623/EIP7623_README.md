@@ -173,6 +173,10 @@ npx hardhat test test/eip7623.test.ts --grep "T4. Large" --network devnet
 - 测试超大 calldata (10KB = 10240 bytes) 的费用计算
 - 验证大规模数据的 gas 计算正确性
 
+**⚠️ Note**: This test will **always pass** on both XDC and EIP-7623 networks because:
+- `STANDARD = 368640` > `FLOOR = 277000` (always uses STANDARD path)
+- XDC and EIP-7623 both use STANDARD, so costs are equal
+
 **Expected Output:**
 | Metric | Value |
 |--------|-------|
@@ -258,8 +262,8 @@ npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|f
 
 | Network | Result | Description |
 |---------|--------|-------------|
-| **devnet (EIP-7623 enabled)** | 5/5 passed | EIP-7623 implemented correctly ✅ |
-| **apothem (XDC - no EIP-7623)** | 5/5 failed | Tests expect EIP-7623 values, XDC uses different formula |
+| **devnet (EIP-7623 enabled)** | 4/5 passed | T1,T2,T3,T5 pass; T4 always passes (see note) ✅ |
+| **apothem (XDC - no EIP-7623)** | 4/5 failed | T1,T2,T3,T5 expect EIP-7623 values; T4 always passes |
 
 ---
 
@@ -280,7 +284,8 @@ npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|f
 | T4 | 5120 | 5120 | huge | huge | huge | ✅ (大) |
 | T5 | 1-10 | 0 | varies | varies | varies | ✅ |
 
-**结论**: 所有测试用例 (T1-T5) 都有差异，可用于验证 EIP-7623 是否在链上正确实现。
+**结论**: T1, T2, T3, T5 有差异，可区分 EIP-7623 是否实现；T4 无差异（始终通过）。
 
 - T2 差异最大 (+100)
 - T3 差异最小 (+2)
+- T4 无差异 (STANDARD > FLOOR, XDC=EIP-7623)
