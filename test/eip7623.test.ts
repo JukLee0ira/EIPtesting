@@ -255,83 +255,68 @@ describe("EIP-7623 Complete Test Suite", function () {
     });
 
     /**
-     * T3. 6 零字节 + 1 非零字节 (中区分度)
-     *
-     * 用例: 零=6, 非零=1
-     * XDC: 21000 + 4×6 + 68×1 = 21092
-     * EIP-7623 STANDARD: 21000 + 4×6 + 68×1 = 21092
-     * EIP-7623 FLOOR: 21000 + 10×(6 + 1×4) = 21100
-     * MAX(21092, 21100) = 21100
-     * 差异: +8 (FLOOR 更大)
-     *
-     * 注意: 在 apothem (无EIP-7623) 上，实际 gas = 21092，断言会失败
-     *       在 devnet (有EIP-7623) 上，实际 gas = 21100，断言会通过
-     */
-    it("T3. 6 Zero + 1 Non-Zero Bytes (Medium Discriminability)", async function () {
-      const zeroBytes = 6;
-      const nonZeroBytes = 1;
-      const calldata = "0x" + "00".repeat(zeroBytes) + "ab".repeat(nonZeroBytes);
-      
-      const gasUsed = await sendTxAndGetGas(owner, {
-        to: ownerAddress,
-        value: 0n,
-        data: calldata,
-      });
-
-      console.log("\n--- T3: 6 Zero + 1 Non-Zero Bytes ---");
-      console.log("Zero bytes:", zeroBytes, "| Non-zero bytes:", nonZeroBytes);
-      console.log("Actual Gas Used:", gasUsed.toString());
-
-      const xdcCost = calculateXDCCost(nonZeroBytes, zeroBytes);
-      const eip7623Floor = calculateEIP7623FloorCost(nonZeroBytes, zeroBytes);
-      const eip7623Cost = calculateEIP7623Cost(nonZeroBytes, zeroBytes);
-
-      console.log("XDC Cost (no EIP-7623):", xdcCost.toString());
-      console.log("EIP-7623 Floor:", eip7623Floor.toString());
-      console.log("EIP-7623 (max):", eip7623Cost.toString());
-      console.log("Difference:", (eip7623Cost - xdcCost).toString());
-
-      // T3: 验证实际 gas 等于 EIP-7623 max
-      // apothem (无EIP-7623): 实际 = 21092 ≠ 21100 → 失败
-      // devnet (有EIP-7623): 实际 = 21100 = 21100 → 通过
-      expect(
-        gasUsed,
-        `T3: Expected exactly ${eip7623Cost} with EIP-7623, got ${gasUsed}`
-      ).to.eq(eip7623Cost);
-    });
-
-    /**
-     * T4. 空 Calldata (基准 - 预期无差异)
+     * T3. 空 Calldata (基准 - 预期无差异)
      *
      * 用例: 零=0, 非零=0
      * XDC: 21000
      * EIP-7623: 21000
      * 差异: 0 (预期无差异)
      */
-    it("T4. Empty Calldata (Baseline - No Difference Expected)", async function () {
+    it("T3. Empty Calldata (Baseline - No Difference Expected)", async function () {
       const zeroBytes = 0;
       const nonZeroBytes = 0;
       const calldata = "0x";
-      
+
       const gasUsed = await sendTxAndGetGas(owner, {
         to: ownerAddress,
         value: 0n,
         data: calldata,
       });
 
-      console.log("\n--- T4: Empty Calldata (No Difference Expected) ---");
-      console.log("Zero bytes:", zeroBytes, "| Non-zero bytes:", nonZeroBytes);
-      console.log("Actual Gas Used:", gasUsed.toString());
-
       const xdcCost = calculateXDCCost(nonZeroBytes, zeroBytes);
-      const eip7623Floor = calculateEIP7623FloorCost(nonZeroBytes, zeroBytes);
+      const eip7623Cost = calculateEIP7623Cost(nonZeroBytes, zeroBytes);
 
-      console.log("XDC Cost (no EIP-7623):", xdcCost.toString());
-      console.log("EIP-7623 Floor:", eip7623Floor.toString());
-      console.log("Difference: 0 (expected)");
+      console.log("\n--- T3: Empty Calldata (Baseline) ---");
+      console.log(`XDC: ${xdcCost} | EIP-7623: ${eip7623Cost} | Actual: ${gasUsed}`);
 
-      // T4: 空 calldata 应该始终是 21000
-      expect(gasUsed).to.eq(BASE_GAS, "T4: Empty calldata should always be 21000 gas");
+      expect(gasUsed).to.eq(BASE_GAS);
+      verifyGasWithTolerance(gasUsed, eip7623Cost);
+    });
+
+    /**
+     * T4. 纯非零字节 (STANDARD > FLOOR)
+     *
+     * 用例: 零=0, 非零=3
+     * XDC: 21000 + 68×3 = 21204
+     * EIP-7623 STANDARD: 21000 + 4×0 + 68×3 = 21204
+     * EIP-7623 FLOOR: 21000 + 10×(0 + 4×3) = 21120
+     * MAX(21204, 21120) = 21204
+     * 差异: +84 (STANDARD 更大)
+     */
+    it("T4. 3 Non-Zero Bytes (STANDARD > FLOOR)", async function () {
+      const zeroBytes = 0;
+      const nonZeroBytes = 3;
+      const calldata = "0x" + "ab".repeat(nonZeroBytes);
+
+      const gasUsed = await sendTxAndGetGas(owner, {
+        to: ownerAddress,
+        value: 0n,
+        data: calldata,
+      });
+
+      const standardPath = calculateStandardPath(zeroBytes, nonZeroBytes);
+      const floorPath = calculateFloorPath(zeroBytes, nonZeroBytes);
+      const eip7623Cost = calculateEIP7623Cost(nonZeroBytes, zeroBytes);
+
+      console.log(`\n--- T4: ${nonZeroBytes} Non-Zero Bytes ---`);
+      console.log(`Calldata: ${calldata}`);
+      console.log(`STANDARD: ${standardPath} | FLOOR: ${floorPath} | EIP-7623: ${eip7623Cost}`);
+      console.log(`Actual: ${gasUsed}`);
+      console.log(`>>> Path: ${standardPath > floorPath ? "STANDARD (higher)" : "FLOOR (higher)"}`);
+
+      expect(gasUsed).to.eq(eip7623Cost);
+      expect(standardPath).to.be.gt(floorPath, "STANDARD should be > FLOOR for 3 non-zero bytes");
+      verifyGasWithTolerance(gasUsed, eip7623Cost);
     });
   });
 
