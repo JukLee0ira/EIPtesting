@@ -11,9 +11,9 @@ This test suite tests EIP-7623 core functions. The proposal aims to increase cal
 
 ---
 
-## XDC Network Gas Formula (Current - Before EIP-7623)
+## Legacy Gas Formula (Before EIP-7623)
 
-XDC 网络当前使用以下公式计算 calldata 费用：
+Networks without EIP-7623 use the following formula:
 
 - **Non-zero byte**: 68 gas/byte
 - **Zero byte**: 4 gas/byte
@@ -173,9 +173,9 @@ npx hardhat test test/eip7623.test.ts --grep "T4. Large" --network devnet
 - 测试超大 calldata (10KB = 10240 bytes) 的费用计算
 - 验证大规模数据的 gas 计算正确性
 
-**⚠️ Note**: This test will **always pass** on both XDC and EIP-7623 networks because:
+**⚠️ Note**: This test will **always pass** on both legacy and EIP-7623 networks because:
 - `STANDARD = 368640` > `FLOOR = 277000` (always uses STANDARD path)
-- XDC and EIP-7623 both use STANDARD, so costs are equal
+- Both networks use STANDARD, so costs are equal
 
 **Expected Output:**
 | Metric | Value |
@@ -232,7 +232,7 @@ npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|f
 
 ## Expected Results
 
-| Test Case | Zero | Non-Zero | Tokens | XDC (4/68) | STANDARD | FLOOR | EIP-7623 | Diff | Path |
+| Test Case | Zero | Non-Zero | Tokens | Legacy (4/68) | STANDARD | FLOOR | EIP-7623 | Diff | Path |
 |-----------|------|----------|--------|------------|----------|-------|----------|------|------|
 | T1 | 4 | 0 | 4 | 21016 | 21016 | 21040 | 21040 | +24 | FLOOR |
 | T2 | 8 | 1 | 12 | 21100 | 21100 | 21200 | 21200 | +100 | FLOOR |
@@ -246,7 +246,7 @@ npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|f
 
 ## Gas Calculation Rule Summary
 
-| Test | Non-zero | Zero | Tokens | XDC (no EIP) | STANDARD | FLOOR | EIP-7623 | Diff | Path |
+| Test | Non-zero | Zero | Tokens | Legacy (no EIP) | STANDARD | FLOOR | EIP-7623 | Diff | Path |
 |------|----------|------|--------|--------------|----------|-------|----------|------|------|
 | T1 | 0 | 4 | 4 | 21016 | 21016 | 21040 | 21040 | +24 | FLOOR |
 | T2 | 1 | 8 | 12 | 21100 | 21100 | 21200 | 21200 | +100 | FLOOR |
@@ -254,7 +254,7 @@ npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|f
 | T4 | 5120 | 5120 | 25600 | huge | huge | huge | huge | huge | varies |
 | T5 | 0 | 1-10 | 1-10 | varies | lower | FLOOR | FLOOR | varies | FLOOR |
 
-**Key**: All tests show FLOOR >= STANDARD (distinguishable on both XDC and EIP-7623 networks)
+**Key**: All tests show FLOOR >= STANDARD (distinguishable on both legacy and EIP-7623 networks)
 
 ---
 
@@ -263,7 +263,7 @@ npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|f
 | Network | Result | Description |
 |---------|--------|-------------|
 | **devnet (EIP-7623 enabled)** | 4/5 passed | T1,T2,T3,T5 pass; T4 always passes (see note) ✅ |
-| **apothem (XDC - no EIP-7623)** | 4/5 failed | T1,T2,T3,T5 expect EIP-7623 values; T4 always passes |
+| **Legacy (no EIP-7623)** | 4/5 failed | T1,T2,T3,T5 expect EIP-7623 values; T4 always passes |
 
 ---
 
@@ -271,12 +271,12 @@ npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|f
 
 测试目标：**验证 EIP-7623 公式是否在 devnet 上正确实现**
 
-- **apothem (无EIP-7623)**：使用 XDC 公式 (4/68)
+- **Legacy (无EIP-7623)**：使用标准公式 (4/68)
 - **devnet (有EIP-7623)**：使用 EIP-7623 floor 公式 (10/40)
 
 **关键点**：只要有差异能区分就行，谁更贵不重要！
 
-| Test Case | Zero | Non-Zero | XDC (4/68) | EIP-7623 | Diff | Distinguishable |
+| Test Case | Zero | Non-Zero | Legacy (4/68) | EIP-7623 | Diff | Distinguishable |
 |-----------|------|----------|------------|----------|------|-----------------|
 | T1 | 4 | 0 | 21016 | 21040 | +24 | ✅ |
 | T2 | 8 | 1 | 21100 | 21200 | +100 | ✅ (最大) |
@@ -288,4 +288,4 @@ npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|f
 
 - T2 差异最大 (+100)
 - T3 差异最小 (+2)
-- T4 无差异 (STANDARD > FLOOR, XDC=EIP-7623)
+- T4 无差异 (STANDARD > FLOOR, Legacy=EIP-7623)

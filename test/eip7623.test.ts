@@ -377,13 +377,13 @@ describe("EIP-7623 Complete Test Suite", function () {
   after(function () {
     console.log("\n=== EIP-7623 Test Suite Completed ===");
     console.log("\n=== Test Case Summary ===");
-    console.log("| Case | Zero | NonZero | XDC    | STANDARD | FLOOR  | EIP-7623 | Diff | Path   |");
-    console.log("|------|------|---------|--------|----------|---------|----------|------|--------|");
-    console.log("| T1   | 4    | 0       | 21016  | 21016    | 21040   | 21040    | +24  | FLOOR  |");
-    console.log("| T2   | 8    | 1       | 21100  | 21100    | 21200   | 21200    | +100 | FLOOR  |");
-    console.log("| T3   | 5    | 1       | 21088  | 21088    | 21090   | 21090    | +2   | FLOOR* |");
-    console.log("| T4   | 5120 | 5120    | huge   | huge     | huge    | huge     | huge | varies |");
-    console.log("| T5   | 1-10 | 0       | varies | varies   | varies  | varies   | varies| FLOOR  |");
+    console.log("| Case | Zero | NonZero | Legacy  | STANDARD | FLOOR  | EIP-7623 | Diff | Path   |");
+    console.log("|------|------|---------|---------|----------|---------|----------|------|--------|");
+    console.log("| T1   | 4    | 0       | 21016   | 21016    | 21040   | 21040    | +24  | FLOOR  |");
+    console.log("| T2   | 8    | 1       | 21100   | 21100    | 21200   | 21200    | +100 | FLOOR  |");
+    console.log("| T3   | 5    | 1       | 21088   | 21088    | 21090   | 21090    | +2   | FLOOR* |");
+    console.log("| T4   | 5120 | 5120    | huge    | huge     | huge    | huge     | huge | varies |");
+    console.log("| T5   | 1-10 | 0       | varies  | varies   | varies  | varies   | varies| FLOOR  |");
     console.log("\nKey: All tests (T1,T2,T3,T5) show FLOOR > STANDARD (distinguishable)");
     console.log("* T3 is critical point where FLOOR ≈ STANDARD (diff only 2 gas)");
   });
