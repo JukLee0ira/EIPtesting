@@ -11,7 +11,7 @@ This test suite tests EIP-7623 core functions. The proposal aims to increase cal
 
 ---
 
-## Legacy Gas Formula (Before EIP-7623)
+## noEIP-7623 Gas Formula (Before EIP-7623)
 
 Networks without EIP-7623 use the following formula:
 
@@ -232,7 +232,7 @@ npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|f
 
 ## Expected Results
 
-| Test Case | Zero | Non-Zero | Tokens | Legacy (4/68) | STANDARD | FLOOR | EIP-7623 | Diff | Path |
+| Test Case | Zero | Non-Zero | Tokens | noEIP-7623 (4/68) | STANDARD | FLOOR | EIP-7623 | Diff | Path |
 |-----------|------|----------|--------|------------|----------|-------|----------|------|------|
 | T1 | 4 | 0 | 4 | 21016 | 21016 | 21040 | 21040 | +24 | FLOOR |
 | T2 | 8 | 1 | 12 | 21100 | 21100 | 21200 | 21200 | +100 | FLOOR |
@@ -246,7 +246,7 @@ npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|f
 
 ## Gas Calculation Rule Summary
 
-| Test | Non-zero | Zero | Tokens | Legacy (no EIP) | STANDARD | FLOOR | EIP-7623 | Diff | Path |
+| Test | Non-zero | Zero | Tokens | noEIP-7623 (no EIP) | STANDARD | FLOOR | EIP-7623 | Diff | Path |
 |------|----------|------|--------|--------------|----------|-------|----------|------|------|
 | T1 | 0 | 4 | 4 | 21016 | 21016 | 21040 | 21040 | +24 | FLOOR |
 | T2 | 1 | 8 | 12 | 21100 | 21100 | 21200 | 21200 | +100 | FLOOR |
@@ -263,7 +263,7 @@ npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|f
 | Network | Result | Description |
 |---------|--------|-------------|
 | **devnet (EIP-7623 enabled)** | 4/5 passed | T1,T2,T3,T5 pass; T4 always passes (see note) ✅ |
-| **Legacy (no EIP-7623)** | 4/5 failed | T1,T2,T3,T5 expect EIP-7623 values; T4 always passes |
+| **noEIP-7623 (no EIP-7623)** | 4/5 failed | T1,T2,T3,T5 expect EIP-7623 values; T4 always passes |
 
 ---
 
@@ -271,12 +271,12 @@ npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|f
 
 测试目标：**验证 EIP-7623 公式是否在 devnet 上正确实现**
 
-- **Legacy (无EIP-7623)**：使用标准公式 (4/68)
+- **noEIP-7623 (无EIP-7623)**：使用标准公式 (4/68)
 - **devnet (有EIP-7623)**：使用 EIP-7623 floor 公式 (10/40)
 
 **关键点**：只要有差异能区分就行，谁更贵不重要！
 
-| Test Case | Zero | Non-Zero | Legacy (4/68) | EIP-7623 | Diff | Distinguishable |
+| Test Case | Zero | Non-Zero | noEIP-7623 (4/68) | EIP-7623 | Diff | Distinguishable |
 |-----------|------|----------|------------|----------|------|-----------------|
 | T1 | 4 | 0 | 21016 | 21040 | +24 | ✅ |
 | T2 | 8 | 1 | 21100 | 21200 | +100 | ✅ (最大) |
@@ -288,4 +288,4 @@ npx hardhat test test/eip7623.test.ts --network devnet 2>&1 | grep -E "passing|f
 
 - T2 差异最大 (+100)
 - T3 差异最小 (+2)
-- T4 无差异 (STANDARD > FLOOR, Legacy=EIP-7623)
+- T4 无差异 (STANDARD > FLOOR, noEIP-7623=EIP-7623)

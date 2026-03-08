@@ -8,7 +8,7 @@
  * https://eips.ethereum.org/EIPS/eip-7623
  *
  * ============================================================
- * XDC NETWORK GAS FORMULA (Current - Before EIP-7623)
+ * noEIP-7623 NETWORK GAS FORMULA (Legacy)
  * ============================================================
  *   - Non-zero byte: 68 gas/byte
  *   - Zero byte: 4 gas/byte
@@ -31,7 +31,7 @@
  * ============================================================
  * IMPACT
  * ============================================================
- *   - XDC Old: Non-zero=68, Zero=4
+ *   - Legacy: Non-zero=68, Zero=4
  *   - EIP-7623 Floor: Non-zero=40, Zero=10
  *   - Regular ETH transfers (no calldata): Always 21000 gas
  */
@@ -41,10 +41,10 @@ import { ethers } from "hardhat";
 import type { Signer } from "ethers";
 
 // ============================================================
-// XDC NETWORK CONSTANTS (Current - Before EIP-7623)
+// Legacy NETWORK CONSTANTS (no EIP-7623)
 // ============================================================
-const XDC_NONZERO_BYTE_COST = 68n;  // XDC: non-zero byte = 68 gas
-const XDC_ZERO_BYTE_COST = 4n;      // XDC: zero byte = 4 gas
+const LEGACY_NONZERO_BYTE_COST = 68n;  // Legacy: non-zero byte = 68 gas
+const LEGACY_ZERO_BYTE_COST = 4n;      // Legacy: zero byte = 4 gas
 
 // EIP-7623 Constants (After EIP-7623)
 const STANDARD_TOKEN_COST = 4n;
@@ -52,9 +52,9 @@ const TOTAL_COST_FLOOR_PER_TOKEN = 10n;
 const ZERO_BYTE_TOKEN_COST = 1n;  // Zero byte = 1 token (standard)
 const BASE_GAS = 21000n;
 
-// Helper function: Calculate XDC (old) gas cost
-function calculateXDCCost(nonZeroBytes: number, zeroBytes: number): bigint {
-  return BASE_GAS + XDC_NONZERO_BYTE_COST * BigInt(nonZeroBytes) + XDC_ZERO_BYTE_COST * BigInt(zeroBytes);
+// Helper function: Calculate noEIP-7623 (legacy) gas cost
+function calculateLegacyCost(nonZeroBytes: number, zeroBytes: number): bigint {
+  return BASE_GAS + LEGACY_NONZERO_BYTE_COST * BigInt(nonZeroBytes) + LEGACY_ZERO_BYTE_COST * BigInt(zeroBytes);
 }
 
 // Helper function: Calculate EIP-7623 floor cost
@@ -65,17 +65,17 @@ function calculateEIP7623FloorCost(nonZeroBytes: number, zeroBytes: number): big
 
 // Helper function: Calculate EIP-7623 full formula (max of STANDARD and FLOOR)
 // EIP-7623: gas = 21000 + max(STANDARD_path, FLOOR_path)
-//   - STANDARD_path = 21000 + 4 * zero_bytes + 68 * non_zero_bytes (original XDC rates)
+//   - STANDARD_path = 21000 + 4 * zero_bytes + 68 * non_zero_bytes (legacy rates)
 //   - FLOOR_path = 21000 + 10 * (zero_bytes + 4 * non_zero_bytes)
 function calculateEIP7623Cost(nonZeroBytes: number, zeroBytes: number): bigint {
-  const standardPath = BASE_GAS + XDC_ZERO_BYTE_COST * BigInt(zeroBytes) + XDC_NONZERO_BYTE_COST * BigInt(nonZeroBytes);
+  const standardPath = BASE_GAS + LEGACY_ZERO_BYTE_COST * BigInt(zeroBytes) + LEGACY_NONZERO_BYTE_COST * BigInt(nonZeroBytes);
   const floorPath = calculateEIP7623FloorCost(nonZeroBytes, zeroBytes);
   return standardPath > floorPath ? standardPath : floorPath;
 }
 
 /** Calculate STANDARD path cost */
 function calculateStandardPath(zeroBytes: number, nonZeroBytes: number): bigint {
-  return BASE_GAS + XDC_ZERO_BYTE_COST * BigInt(zeroBytes) + XDC_NONZERO_BYTE_COST * BigInt(nonZeroBytes);
+  return BASE_GAS + LEGACY_ZERO_BYTE_COST * BigInt(zeroBytes) + LEGACY_NONZERO_BYTE_COST * BigInt(nonZeroBytes);
 }
 
 /** Calculate FLOOR path cost */
@@ -166,7 +166,7 @@ describe("EIP-7623 Complete Test Suite", function () {
      * T1. 4 零字节
      *
      * 用例: 零=4, 非零=0
-     * XDC: 21000 + 4×4 = 21016
+     * noEIP-7623: 21000 + 4×4 = 21016
      * EIP-7623 STANDARD: 21000 + 4×4 = 21016
      * EIP-7623 FLOOR: 21000 + 10×4 = 21040
      * MAX(21016, 21040) = 21040
@@ -190,11 +190,11 @@ describe("EIP-7623 Complete Test Suite", function () {
       console.log("Zero bytes:", zeroBytes, "| Non-zero bytes:", nonZeroBytes);
       console.log("Actual Gas Used:", gasUsed.toString());
 
-      const xdcCost = calculateXDCCost(nonZeroBytes, zeroBytes);
+      const xdcCost = calculateLegacyCost(nonZeroBytes, zeroBytes);
       const eip7623Floor = calculateEIP7623FloorCost(nonZeroBytes, zeroBytes);
       const eip7623Cost = calculateEIP7623Cost(nonZeroBytes, zeroBytes);
 
-      console.log("XDC Cost (no EIP-7623):", xdcCost.toString());
+      console.log("noEIP-7623 Cost (no EIP-7623):", xdcCost.toString());
       console.log("EIP-7623 Floor:", eip7623Floor.toString());
       console.log("EIP-7623 (max):", eip7623Cost.toString());
       console.log("Difference:", (eip7623Cost - xdcCost).toString());
@@ -212,7 +212,7 @@ describe("EIP-7623 Complete Test Suite", function () {
      * T2. 8 零字节 + 1 非零字节 (高区分度)
      *
      * 用例: 零=8, 非零=1
-     * XDC: 21000 + 4×8 + 68×1 = 21100
+     * noEIP-7623: 21000 + 4×8 + 68×1 = 21100
      * EIP-7623 STANDARD: 21000 + 4×8 + 68×1 = 21100
      * EIP-7623 FLOOR: 21000 + 10×(8 + 1×4) = 21200
      * MAX(21100, 21200) = 21200
@@ -236,11 +236,11 @@ describe("EIP-7623 Complete Test Suite", function () {
       console.log("Zero bytes:", zeroBytes, "| Non-zero bytes:", nonZeroBytes);
       console.log("Actual Gas Used:", gasUsed.toString());
 
-      const xdcCost = calculateXDCCost(nonZeroBytes, zeroBytes);
+      const xdcCost = calculateLegacyCost(nonZeroBytes, zeroBytes);
       const eip7623Floor = calculateEIP7623FloorCost(nonZeroBytes, zeroBytes);
       const eip7623Cost = calculateEIP7623Cost(nonZeroBytes, zeroBytes);
 
-      console.log("XDC Cost (no EIP-7623):", xdcCost.toString());
+      console.log("noEIP-7623 Cost (no EIP-7623):", xdcCost.toString());
       console.log("EIP-7623 Floor:", eip7623Floor.toString());
       console.log("EIP-7623 (max):", eip7623Cost.toString());
       console.log("Difference:", (eip7623Cost - xdcCost).toString());
@@ -263,7 +263,7 @@ describe("EIP-7623 Complete Test Suite", function () {
      * T3. FLOOR = STANDARD 临界点
      *
      * 用例: 零=5, 非零=1
-     * XDC: 21000 + 4×5 + 68×1 = 21088
+     * noEIP-7623: 21000 + 4×5 + 68×1 = 21088
      * EIP-7623 STANDARD: 21000 + 4×5 + 68×1 = 21088
      * EIP-7623 FLOOR: 21000 + 10×(5 + 1×4) = 21090
      * MAX(21088, 21090) = 21090
@@ -320,12 +320,12 @@ describe("EIP-7623 Complete Test Suite", function () {
         gasLimit: 2000000n, // Increase gas limit for large calldata
       });
 
-      const xdcCost = calculateXDCCost(nonZeroBytes, zeroBytes);
+      const xdcCost = calculateLegacyCost(nonZeroBytes, zeroBytes);
       const standardPath = calculateStandardPath(zeroBytes, nonZeroBytes);
       const floorPath = calculateFloorPath(zeroBytes, nonZeroBytes);
       const eip7623Cost = calculateEIP7623Cost(nonZeroBytes, zeroBytes);
 
-      console.log(`XDC: ${xdcCost}`);
+      console.log(`noEIP-7623: ${xdcCost}`);
       console.log(`STANDARD: ${standardPath} | FLOOR: ${floorPath} | EIP-7623: ${eip7623Cost}`);
       console.log(`Actual: ${gasUsed}`);
       console.log(`>>> Path: ${standardPath > floorPath ? "STANDARD" : "FLOOR"}`);
@@ -358,11 +358,11 @@ describe("EIP-7623 Complete Test Suite", function () {
           data: calldata,
         });
 
-        const xdcCost = calculateXDCCost(tc.nonZero, tc.zero);
+        const xdcCost = calculateLegacyCost(tc.nonZero, tc.zero);
         const eip7623Cost = calculateEIP7623Cost(tc.nonZero, tc.zero);
 
         console.log(`\n--- T8: ${tc.desc} ---`);
-        console.log(`XDC: ${xdcCost} | EIP-7623: ${eip7623Cost} | Actual: ${gasUsed}`);
+        console.log(`noEIP-7623: ${xdcCost} | EIP-7623: ${eip7623Cost} | Actual: ${gasUsed}`);
         console.log(`>>> Difference: ${eip7623Cost - xdcCost} gas`);
 
         expect(gasUsed).to.eq(eip7623Cost);
@@ -377,13 +377,13 @@ describe("EIP-7623 Complete Test Suite", function () {
   after(function () {
     console.log("\n=== EIP-7623 Test Suite Completed ===");
     console.log("\n=== Test Case Summary ===");
-    console.log("| Case | Zero | NonZero | Legacy  | STANDARD | FLOOR  | EIP-7623 | Diff | Path   |");
-    console.log("|------|------|---------|---------|----------|---------|----------|------|--------|");
-    console.log("| T1   | 4    | 0       | 21016   | 21016    | 21040   | 21040    | +24  | FLOOR  |");
-    console.log("| T2   | 8    | 1       | 21100   | 21100    | 21200   | 21200    | +100 | FLOOR  |");
-    console.log("| T3   | 5    | 1       | 21088   | 21088    | 21090   | 21090    | +2   | FLOOR* |");
-    console.log("| T4   | 5120 | 5120    | huge    | huge     | huge    | huge     | huge | varies |");
-    console.log("| T5   | 1-10 | 0       | varies  | varies   | varies  | varies   | varies| FLOOR  |");
+    console.log("| Case | Zero | NonZero | noEIP-7623 | STANDARD | FLOOR  | EIP-7623 | Diff | Path   |");
+    console.log("|------|------|---------|------------|----------|---------|----------|------|--------|");
+    console.log("| T1   | 4    | 0       | 21016      | 21016    | 21040   | 21040    | +24  | FLOOR  |");
+    console.log("| T2   | 8    | 1       | 21100      | 21100    | 21200   | 21200    | +100 | FLOOR  |");
+    console.log("| T3   | 5    | 1       | 21088      | 21088    | 21090   | 21090    | +2   | FLOOR* |");
+    console.log("| T4   | 5120 | 5120    | huge       | huge     | huge    | huge     | huge | varies |");
+    console.log("| T5   | 1-10 | 0       | varies     | varies   | varies  | varies   | varies| FLOOR  |");
     console.log("\nKey: All tests (T1,T2,T3,T5) show FLOOR > STANDARD (distinguishable)");
     console.log("* T3 is critical point where FLOOR ≈ STANDARD (diff only 2 gas)");
   });
